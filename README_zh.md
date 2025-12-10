@@ -18,13 +18,13 @@
 ## 模型介绍
 GLM-TTS 是一个基于大型语言模型的高质量文本到语音(TTS)合成系统，支持零样本语音克隆和流式推理。本系统采用两阶段架构：首先使用LLM生成语音token序列，然后使用Flow模型将token转换为高质量的音频波形。通过引入多奖励强化学习(Multi-Reward RL)框架，GLM-TTS能够生成更加富有表现力和情感色彩的语音，显著提升了传统TTS系统的表现力。
 
-## 📅 更新计划
+## 更新计划
 
 - **[2025.12.10]** 🎉 项目正式开源！包括推理脚本和一系列模型权重。
 - **[Coming Soon]** 2D-Vocos声码器更新中。
 - **[Coming Soon]** 强化学习优化后的模型权重。
 
-## ✨ 主要特性
+## 主要特性
 
 - **零样本语音克隆**：仅需3-10秒的提示音频即可克隆任意说话人声音
 - **RL-增强的情感控制**：通过多奖励强化学习框架，实现更自然的情感表达和韵律控制
@@ -34,11 +34,10 @@ GLM-TTS 是一个基于大型语言模型的高质量文本到语音(TTS)合成�
 - **音素级建模**：支持音素级别的文本到语音转换
 - **灵活的推理方式**：支持多种采样策略和推理模式
 
-## 🚀 快速开始
+## 快速开始
 
 ### 环境安装
-
-确保你使用 python3.10 - python 3.12 版本。
+确保你使用 python3.10-python3.12 版本。
 
 ```bash
 # 克隆仓库
@@ -96,7 +95,7 @@ bash glmtts_inference.sh
 python tools/gradio_app.py
 ```
 
-## 🧠 系统架构
+## 系统架构
 
 ### 整体架构
 
@@ -135,7 +134,7 @@ GLM-TTS 采用两阶段设计：第一阶段，基于Llama架构的大型语言�
 
 通过RL优化，GLM-TTS_RL相比基础模型在CER指标上从1.03降低到0.89，同时保持了较高的相似度，实现了更好的音质和表现力。
 
-## 🛠️ 核心组件与实现
+## 核心组件与实现
 
 ### LLM Backend
 - **文件位置**: [`llm/glmtts.py`](llm/glmtts.py)
@@ -162,7 +161,7 @@ GLM-TTS 采用两阶段设计：第一阶段，基于Llama架构的大型语言�
   - [`reward_server.py`](grpo/reward_server.py): 分布式奖励服务器
 - **功能**: 通过多奖励强化学习优化TTS系统的情感表达能力
 
-## 📊 实验结果
+## 实验结果
 
 在 `seed-tts-eval` 上进行评估，为与原版评估保持一致，未使用 `--phoneme` 参数进行推理。
 **CER**: 字符错误率 (越低越好 $\downarrow$) | **SIM**: 相似度 (越高越好 $\uparrow$)
@@ -184,7 +183,7 @@ GLM-TTS 采用两阶段设计：第一阶段，基于Llama架构的大型语言�
 | **GLM-TTS (Ours)** | 1.03 | 76.1 | 👐 Yes |
 | **GLM-TTS_RL (Ours)** | **0.89** | 76.4 | 👐 Yes |
 
-## 📂 项目结构
+## 项目结构
 
 ```
 GLM-TTS/
@@ -237,7 +236,7 @@ GLM-TTS/
     └── glm_g2p.py                # 文字到音素转换
 ```
 
-## 🙏 致谢 & 引用
+## 致谢
 
 我们感谢以下开源项目的支持：
 
@@ -245,13 +244,3 @@ GLM-TTS/
 - [Llama](https://github.com/meta-llama/llama) - 提供基础语言模型架构
 - [Vocos](https://github.com/charactr-platform/vocos) - 提供高质量声码器
 - [GRPO-Zero](https://github.com/policy-gradient/GRPO-Zero) - 强化学习算法实现灵感
-
-如果您在研究中使用了GLM-TTS，请引用：
-
-```bibtex
-@misc{glmtts2025,
-  title={GLM-TTS: Controllable & Emotion-Expressive Zero-shot TTS with Multi-Reward Reinforcement Learning},
-  author={CogAudio Group Members},
-  year={2025},
-  publisher={Zhipu AI Inc}
-}

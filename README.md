@@ -19,13 +19,13 @@
 ## Model Introduction
 GLM-TTS is a high-quality text-to-speech (TTS) synthesis system based on large language models, supporting zero-shot voice cloning and streaming inference. This system adopts a two-stage architecture: first, it uses LLM to generate speech token sequences, then uses Flow model to convert tokens into high-quality audio waveforms. By introducing a Multi-Reward Reinforcement Learning framework, GLM-TTS can generate more expressive and emotional speech, significantly improving the expressiveness of traditional TTS systems.
 
-## 📅 News & Updates
+## News & Updates
 
 - **[2025.12.10]** 🎉 The project is officially open-sourced, featuring inference scripts and a series of model weights.
 - **[Coming Soon]** 2D Vocos vocoder update in progress.
 - **[Coming Soon]** Model Weights Optimized via Reinforcement Learning
 
-## ✨ Features
+## Features
 
 - **Zero-shot Voice Cloning**: Clone any speaker's voice with just 3-10 seconds of prompt audio
 - **RL-enhanced Emotion Control**: Achieve more natural emotional expression and prosody control through multi-reward reinforcement learning framework
@@ -35,11 +35,10 @@ GLM-TTS is a high-quality text-to-speech (TTS) synthesis system based on large l
 - **Phoneme-level Modeling**: Support phoneme-level text-to-speech conversion
 - **Flexible Inference Methods**: Support multiple sampling strategies and inference modes
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Environment Setup
-
-Make sure you’re using Python 3.10 to 3.12.
+Ensure you use Python 3.10-Python 3.12 versions.
 
 ```bash
 # Clone repository
@@ -97,7 +96,7 @@ bash glmtts_inference.sh
 python tools/gradio_app.py
 ```
 
-## 🧠 System Architecture
+## System Architecture
 
 ### Overview
 
@@ -137,7 +136,7 @@ To address the issue of flat emotional expression in traditional TTS, we introdu
 
 Through RL optimization, GLM-TTS_RL reduces the CER metric from 1.03 to 0.89 compared to the base model, while maintaining high similarity, achieving better sound quality and expressiveness.
 
-## 🛠️ Core Components & Implementation
+## Core Components & Implementation
 
 ### LLM Backend
 - **File Location**: [`llm/glmtts.py`](llm/glmtts.py)
@@ -164,7 +163,7 @@ Through RL optimization, GLM-TTS_RL reduces the CER metric from 1.03 to 0.89 com
   - [`reward_server.py`](grpo/reward_server.py): Distributed reward server
 - **Function**: Optimizes the emotional expressiveness of the TTS system through multi-reward reinforcement learning
 
-## 📊 Evaluation Results
+## Evaluation Results
 
 Evaluated on `seed-tts-eval`. To maintain consistency with the original evaluation, inference was performed without the `--phoneme` flag.
 
@@ -187,7 +186,7 @@ Evaluated on `seed-tts-eval`. To maintain consistency with the original evaluati
 | **GLM-TTS (Ours)** | 1.03 | 76.1 | 👐 Yes |
 | **GLM-TTS_RL (Ours)** | **0.89** | 76.4 | 👐 Yes |
 
-## 📂 Project Structure
+## Project Structure
 
 ```
 GLM-TTS/
@@ -240,7 +239,7 @@ GLM-TTS/
     └── glm_g2p.py                   # Text to phoneme conversion
 ```
 
-## 🙏 Acknowledgments & Citation
+## Acknowledgments
 
 We thank the following open-source projects for their support:
 
@@ -248,13 +247,3 @@ We thank the following open-source projects for their support:
 - [Llama](https://github.com/meta-llama/llama) - Providing basic language model architecture
 - [Vocos](https://github.com/charactr-platform/vocos) - Providing high-quality vocoder
 - [GRPO-Zero](https://github.com/policy-gradient/GRPO-Zero) - Reinforcement learning algorithm implementation inspiration
-
-If you use GLM-TTS in your research, please cite:
-
-```bibtex
-@misc{glmtts2025,
-  title={GLM-TTS: Controllable & Emotion-Expressive Zero-shot TTS with Multi-Reward Reinforcement Learning},
-  author={CogAudio Group Members},
-  year={2025},
-  publisher={Zhipu AI Inc}
-}
