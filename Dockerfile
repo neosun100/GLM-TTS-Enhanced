@@ -26,6 +26,8 @@ COPY *.py ./
 COPY utils/ ./utils/
 COPY llm/ ./llm/
 COPY cosyvoice/ ./cosyvoice/
+COPY ckpt/ ./ckpt/
+COPY frontend/ ./frontend/
 COPY static/ ./static/
 COPY templates/ ./templates/
 
