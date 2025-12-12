@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   glm-tts:
-    image: neosun/glm-tts:latest
+    image: neosun/glm-tts:all-in-one-v2
     container_name: glm-tts
     runtime: nvidia
     environment:
@@ -10,6 +10,7 @@ services:
       - PORT=8080
       - GPU_IDLE_TIMEOUT=60
       - TEMP_DIR=/tmp/glm-tts-voices
+      - ENABLE_MEMORY_CACHE=true
     ports:
       - "0.0.0.0:8080:8080"
     volumes:
