@@ -1,5 +1,5 @@
-# GLM-TTS Enhanced v1.2.0 - All-in-One Docker Image
-FROM nvidia/cuda:12.1.0-cudnn9-runtime-ubuntu22.04
+# GLM-TTS Enhanced v2.0.0 - All-in-One Docker Image
+FROM nvidia/cuda:12.1.0-cudnn8-runtime-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
@@ -26,8 +26,16 @@ COPY *.py ./
 COPY static/ ./static/
 COPY templates/ ./templates/
 
-# Download models (if not using volume mount)
-RUN mkdir -p /app/ckpt
+# Download models - All-in-One
+RUN mkdir -p /app/ckpt && \
+    mkdir -p /app/examples && \
+    cd /app && \
+    git clone --depth=1 https://www.modelscope.cn/iic/CosyVoice-300M.git ckpt/CosyVoice-300M && \
+    git clone --depth=1 https://www.modelscope.cn/ZhipuAI/glm-4-voice-9b.git ckpt/glm-4-voice-9b && \
+    git clone --depth=1 https://github.com/FunAudioLLM/CosyVoice.git /tmp/cosyvoice && \
+    cp -r /tmp/cosyvoice/cosyvoice /app/ && \
+    cp -r /tmp/cosyvoice/third_party /app/ && \
+    rm -rf /tmp/cosyvoice
 
 # Create temp directory
 RUN mkdir -p /tmp/glm-tts-voices

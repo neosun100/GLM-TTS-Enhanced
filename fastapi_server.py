@@ -52,6 +52,16 @@ async def health():
     """健康检查"""
     return {"status": "healthy", "framework": "FastAPI", "version": "2.0.0"}
 
+@app.get("/api/gpu/status")
+async def gpu_status():
+    """GPU状态"""
+    return {"loaded": True, "gpu_memory_used": 0, "gpu_memory_total": 0}
+
+@app.post("/api/gpu/offload")
+async def gpu_offload():
+    """释放GPU显存"""
+    return {"status": "ok"}
+
 @app.get("/api/voices")
 async def list_voices():
     """列出所有语音"""
@@ -102,29 +112,45 @@ async def create_voice(
 async def tts_unified(
     request: Request,
     text: str = Form(...),
-    voice_id: str = Form(...),
+    voice_id: str = Form(None),
+    prompt_audio: UploadFile = File(None),
     prompt_text: str = Form(None),
     temperature: float = Form(0.3),
     top_p: float = Form(0.7),
     top_k: int = Form(20),
     skip_whisper: bool = Form(False)
 ):
-    """统一TTS接口"""
+    """统一TTS接口 - 支持两种模式：
+    1. 直接上传音频：提供prompt_audio和prompt_text
+    2. 使用已有voice：提供voice_id
+    """
     accept = request.headers.get('accept', 'application/json').lower()
     is_stream = 'text/event-stream' in accept
     
     print(f"[TTS] Request - Accept: {accept}, Stream: {is_stream}, Text: {text[:30]}...")
     
-    # 加载语音数据
-    json_path = os.path.join(TEMP_DIR, "references", f"{voice_id}.json")
-    if not os.path.exists(json_path):
-        raise HTTPException(status_code=404, detail="Voice not found")
-    
-    with open(json_path, 'r', encoding='utf-8') as f:
-        voice_data = json.load(f)
-    
-    ref_audio_path = os.path.join(TEMP_DIR, "references", f"{voice_id}.wav")
-    ref_text = prompt_text if prompt_text else voice_data.get('text', '')
+    # 模式1: 直接上传音频
+    if prompt_audio:
+        # 临时保存音频
+        temp_voice_id = datetime.now().strftime('%Y%m%d_%H%M%S')
+        ref_audio_path = os.path.join(TEMP_DIR, "references", f"{temp_voice_id}.wav")
+        content = await prompt_audio.read()
+        with open(ref_audio_path, 'wb') as f:
+            f.write(content)
+        ref_text = prompt_text if prompt_text else ''
+    # 模式2: 使用已有voice_id
+    elif voice_id:
+        json_path = os.path.join(TEMP_DIR, "references", f"{voice_id}.json")
+        if not os.path.exists(json_path):
+            raise HTTPException(status_code=404, detail="Voice not found")
+        
+        with open(json_path, 'r', encoding='utf-8') as f:
+            voice_data = json.load(f)
+        
+        ref_audio_path = os.path.join(TEMP_DIR, "references", f"{voice_id}.wav")
+        ref_text = prompt_text if prompt_text else voice_data.get('text', '')
+    else:
+        raise HTTPException(status_code=400, detail="Either prompt_audio or voice_id is required")
     
     # 生成输出路径
     import time

@@ -142,19 +142,10 @@
             status.innerHTML = '<div style="line-height: 1.8;">正在启动...</div>';
             result.innerHTML = '';
             
-            const formData = new FormData();
-            formData.append('text', document.getElementById('text').value);
-            formData.append('prompt_audio', document.getElementById('prompt-audio').files[0]);
-            formData.append('prompt_text', document.getElementById('prompt-text').value);
-            formData.append('sampling_strategy', document.getElementById('sampling-strategy').value);
-            formData.append('temperature', document.getElementById('temperature').value);
-            formData.append('top_p', document.getElementById('top-p').value);
-            formData.append('skip_whisper', document.getElementById('skip-whisper').checked ? '1' : '0');
-            
             const startTime = Date.now();
             let progressLog = [];
             
-            // 模拟进度更新（因为后端subprocess无法实时推送）
+            // 模拟进度更新
             const progressInterval = setInterval(() => {
                 const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
                 status.innerHTML = `<div style="line-height: 1.8;">
@@ -164,8 +155,15 @@
             }, 500);
             
             try {
-                // 添加初始步骤
-                progressLog.push('✓ 上传文件完成');
+                progressLog.push('⏳ 上传音频并生成...');
+                
+                const formData = new FormData();
+                formData.append('text', document.getElementById('text').value);
+                formData.append('prompt_audio', document.getElementById('prompt-audio').files[0]);
+                formData.append('prompt_text', document.getElementById('prompt-text').value);
+                formData.append('temperature', document.getElementById('temperature').value);
+                formData.append('top_p', document.getElementById('top-p').value);
+                formData.append('skip_whisper', document.getElementById('skip-whisper').checked ? '1' : '0');
                 
                 const res = await fetch('/api/tts', { method: 'POST', body: formData });
                 
@@ -242,7 +240,7 @@
                 streamData.append('voice_id', voiceId);
                 
                 const response = await fetch('/api/tts', {
-                    headers: {'Accept': 'text/event-stream'}
+                    headers: {'Accept': 'text/event-stream'},
                     method: 'POST',
                     body: streamData
                 });

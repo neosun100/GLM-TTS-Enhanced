@@ -37,8 +37,8 @@ Enhanced version of GLM-TTS with production-ready features: Web UI, REST API, Wh
 ### Using Docker (All-in-One Image)
 
 ```bash
-# Pull the all-in-one image
-docker pull neosun/glm-tts:all-in-one
+# Pull the latest v2.0.0 image
+docker pull neosun/glm-tts:v2.0.0
 
 # Create temporary directory
 mkdir -p /tmp/glm-tts-voices
@@ -54,7 +54,7 @@ docker run -d \
   -p 8080:8080 \
   -v /tmp/glm-tts-voices:/tmp/glm-tts-voices \
   --restart unless-stopped \
-  neosun/glm-tts:all-in-one
+  neosun/glm-tts:v2.0.0
 ```
 
 **Access the Web UI**: `http://localhost:8080`
@@ -156,8 +156,8 @@ python mcp_server.py
 └────────┬────────┘
          │
 ┌────────▼────────┐
-│  Flask Server   │
-│  (server.py)    │
+│ FastAPI Server  │
+│(fastapi_server) │
 └────────┬────────┘
          │
 ┌────────▼────────┐
@@ -177,7 +177,7 @@ python mcp_server.py
 
 | Component | Description |
 |-----------|-------------|
-| `server.py` | Flask REST API with SSE progress streaming |
+| `fastapi_server.py` | FastAPI REST API with SSE streaming support |
 | `tts_engine.py` | TTS inference engine with Whisper integration |
 | `mcp_server.py` | MCP server for AI agent integration |
 | `Dockerfile` | Multi-stage build with cuDNN 9 |
@@ -263,6 +263,14 @@ Contributions welcome! Please:
 5. Open a Pull Request
 
 ## 📝 Changelog
+
+### v2.0.0 (2025-12-12)
+- 🚀 Streaming TTS with SSE (Server-Sent Events)
+- ⚡ Pre-generation architecture for async optimization
+- 🎵 Real-time audio chunk delivery
+- 🔄 FastAPI framework migration
+- 📡 Standard and streaming TTS dual modes
+- 🎯 Production-ready streaming pipeline
 
 ### v1.0.0 (2025-12-12)
 - ✨ Initial enhanced release
