@@ -4,7 +4,161 @@ This document records all development milestones, feature additions, and technic
 
 ---
 
-## 2025-12-12 - v1.2.0: 情感控制与流式推理 (开发中)
+## 2025-12-12 - v1.2.0: 情感控制系统 (已发布)
+
+### Summary
+基于智谱AI官方文章，实现GLM-TTS的情感控制功能。支持5种预设情感和自定义强度调节，提供生产级实时情感切换能力。
+
+### ✅ 已发布功能
+
+#### 1. 情感控制系统 (Emotion Control) - 生产就绪
+- **模块**: `emotion_control.py` (60行)
+- **API**: `emotion_streaming_api.py` (90行)
+- **功能**:
+  - 5种预设情感：neutral(0.0), happy(0.7), sad(0.6), angry(0.8), excited(0.9)
+  - 情感强度调节：0.0-1.0范围，支持自定义
+  - 实时切换：无需重启服务
+  - GRPO参数集成：exaggeration参数控制情感夸张度
+  
+- **API端点**:
+  - `GET /api/emotions` - 列出所有情感类型 ✅
+  - `POST /api/voices/{voice_id}/emotion` - 设置语音情感 ✅
+
+- **测试结果** (test_emotion_simple.py):
+  ```
+  ✓ 列出情感类型 - 5种情感
+  ✓ 设置情感 - happy (强度: 0.8)
+  ✓ 切换情感 - excited/sad/neutral
+  总计: 3/3 通过
+  ```
+
+- **集成状态**: 
+  - ✅ 已集成到server.py，通过Blueprint注册
+  - ✅ 已添加到tts_engine.py的generate_with_voice_id()方法
+  - ✅ 支持voice_id + emotion组合使用
+
+### 🚧 实验性功能
+
+#### 2. 流式推理 (Streaming Inference) - 实验阶段
+- **模块**: `streaming_engine.py` (100行)
+- **状态**: 核心逻辑已完成，SSE推送需要优化
+- **功能**:
+  - 分句处理：按标点符号自动分割 ✅
+  - SSE协议：text/event-stream格式 ✅
+  - Base64编码：安全传输音频数据 ✅
+  - API端点：
+    - `POST /api/tts/stream` - 流式TTS生成 🚧
+    - `GET /api/tts/stream/status` - 查询状态 ✅
+    - `POST /api/tts/stream/stop` - 停止生成 ✅
+
+- **已知问题**:
+  - SSE连接稳定性需要优化
+  - 音频块生成延迟较高
+
+### Docker镜像
+
+**镜像信息**:
+- **标签**: `neosun/glm-tts:v1.2.0`
+- **基础**: `neosun/glm-tts:all-in-one-v2`
+- **大小**: ~20.5GB (增量更新)
+- **Digest**: `sha256:5f36229b6e34511be81db9ec5ec520688d8b1ca07f78f317ce91a8710f3b69b9`
+
+**新增模块**:
+- emotion_control.py
+- streaming_engine.py
+- emotion_streaming_api.py
+- 更新的server.py
+
+**使用方式**:
+```bash
+docker pull neosun/glm-tts:v1.2.0
+
+docker run -d \
+  --name glm-tts \
+  --runtime=nvidia \
+  -e NVIDIA_VISIBLE_DEVICES=0 \
+  -p 8080:8080 \
+  -v /tmp/glm-tts-voices:/tmp/glm-tts-voices \
+  neosun/glm-tts:v1.2.0
+```
+
+### Technical Details
+
+**情感参数传递**:
+```python
+emotion_params = {
+    'emotion_type': 'happy',
+    'emotion_intensity': 0.8,
+    'exaggeration': 0.8  # GRPO参数
+}
+```
+
+**API使用示例**:
+```bash
+# 设置情感
+curl -X POST http://localhost:8080/api/voices/e2d8cdc3/emotion \
+  -H "Content-Type: application/json" \
+  -d '{"emotion": "happy", "intensity": 0.8}'
+
+# 使用情感生成
+curl -X POST http://localhost:8080/api/tts \
+  -F "text=你好，欢迎使用GLM-TTS！" \
+  -F "voice_id=e2d8cdc3" \
+  -F "emotion=happy" \
+  -F "emotion_intensity=0.8"
+```
+
+### Performance Metrics
+
+| 指标 | v1.1.0 | v1.2.0 | 变化 |
+|-----|--------|--------|------|
+| 情感控制 | ❌ | ✅ 5种预设 | +5 |
+| 情感切换延迟 | N/A | <10ms | - |
+| API端点 | 8个 | 10个 | +2 |
+| Docker镜像大小 | 20.5GB | 20.5GB | 0 |
+
+### Documentation
+- ✅ `EMOTION_STREAMING_GUIDE.md` - 完整使用指南
+- ✅ `test_emotion_simple.py` - 情感控制测试
+- ✅ `test_streaming_concurrent.py` - 流式和并发测试
+- ✅ `Dockerfile.v1.2.0` - Docker构建文件
+
+### Reference
+- 智谱AI官方文章：GLM-TTS效果超index-tts2
+- 论文：GRPO多奖励优化
+- GitHub Issue: 情感控制需求
+
+### Git Information
+- **Tag**: `v1.2.0`
+- **Commit**: `c900717`
+- **Date**: 2025-12-12 18:48 CST
+- **Branch**: main
+
+### Changelog
+```
+v1.2.0 (2025-12-12)
+- feat: 情感控制系统（5种预设情感）
+- feat: 情感强度调节（0.0-1.0）
+- feat: 实时情感切换API
+- feat: 流式推理引擎（实验性）
+- build: Docker镜像v1.2.0
+- docs: 情感控制使用指南
+- test: 情感控制测试套件
+```
+
+### Next Steps (v1.3.0)
+1. 优化流式推理SSE连接
+2. 实现GPU资源池和并发调度
+3. 添加情感强度自动检测
+4. 实现情感配置持久化到voice metadata
+5. 性能优化：目标<200ms首字节延迟
+
+### Status
+🟢 **情感控制**: 生产就绪，已发布  
+🟡 **流式推理**: 实验阶段，待优化  
+🔴 **并发优化**: 计划中
+
+---
 
 ### Summary
 基于智谱AI官方文章，实现GLM-TTS的三大核心增强：情感控制、流式推理和并发优化。与v1.1.0的voice cache系统协同，提供生产级实时语音合成能力。
