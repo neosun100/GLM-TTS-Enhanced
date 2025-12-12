@@ -1,66 +1,109 @@
-output/
-.wb_config.json
+# Sensitive Information
+.env
+*.key
+*.pem
+*.p12
+*.pfx
+secrets/
+credentials/
+config.local.*
+
+# API Keys and Tokens
+*_token
+*_secret
+*_api_key
+*.credentials
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
+*.so
 
-# Visual Studio Code files
-.vscode
-.vs
+# IDE files
+.vscode/
+.vs/
+.idea/
+*.swp
+*.swo
+*.swn
+*.swm
+*~
+.DS_Store
+Thumbs.db
 
-# PyCharm files
-.idea
-
-# Eclipse Project settings
+# Project settings
 *.*project
-.settings
-
-# Sublime Text settings
+.settings/
 *.sublime-workspace
 *.sublime-project
 
-# Editor temporaries
-*.swn
-*.swo
-*.swp
-*.swm
-*~
+# Python virtual environments
+venv/
+env/
+ENV/
+.venv/
 
-# IPython notebook checkpoints
-.ipynb_checkpoints
+# Jupyter Notebook
+.ipynb_checkpoints/
 
-# macOS dir files
-.DS_Store
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+.eggs/
 
-exp
-raw_wav
-tensorboard
-**/*build*
-
-# Clangd files
-.cache
-compile_commands.json
-
-# train/inference files
-*.pt
-pretrained_models/*
-*_pb2_grpc.py
-*_pb2.py
+# Logs
+*.log
 logs/
-wandb/
-/tools/g2p/
-error.txt
+server.log
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Temporary files
+output/
 outputs/
-outputs_sglang/
 outputs_*/
 output*/
+*.tmp
+*.temp
+/tmp/
 
-modules/*
+# Model files (too large for git)
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+pretrained_models/
+model_cache/
+ckpt/
 
-*pyc
-model_cache/*
+# Training artifacts
+tensorboard/
+wandb/
+exp/
+raw_wav/
+
+# Build artifacts
+**/*build*/
+compile_commands.json
+.cache/
+
+# Generated files
+*_pb2.py
+*_pb2_grpc.py
+error.txt
 *embs.tar
+
+# Service specific
 web_service/
 helps/
-ckpt/
+modules/*
+/tools/g2p/
+.wb_config.json
+
+# Docker
+.dockerignore

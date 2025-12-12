@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  glm-tts:
+    image: neosun/glm-tts:latest
+    container_name: glm-tts
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=2
+      - PORT=8080
+      - GPU_IDLE_TIMEOUT=60
+      - TEMP_DIR=/tmp/glm-tts-voices
+    ports:
+      - "0.0.0.0:8080:8080"
+    volumes:
+      - /tmp/glm-tts-voices:/tmp/glm-tts-voices
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['2']
+              capabilities: [gpu]
