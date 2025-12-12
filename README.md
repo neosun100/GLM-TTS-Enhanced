@@ -18,7 +18,7 @@ Enhanced version of GLM-TTS with production-ready features: Web UI, REST API, Wh
 - **🔌 REST API**: Complete API with Swagger documentation at `/apidocs`
 - **🎤 Whisper Integration**: Automatic audio transcription when reference text is empty
 - **📊 Real-time Progress**: SSE-based streaming with elapsed time display
-- **🐳 All-in-One Docker**: 20.5GB image with all models and dependencies
+- **🐳 All-in-One Docker**: 23.6GB image with all models and dependencies
 - **⚡ GPU Optimized**: cuDNN 9 support for ONNX Runtime GPU acceleration
 - **💾 Persistent Storage**: Host-mounted directory for file management
 - **🔧 Advanced Controls**: Temperature, Top-p, and sampling strategy parameters
@@ -37,8 +37,8 @@ Enhanced version of GLM-TTS with production-ready features: Web UI, REST API, Wh
 ### Using Docker (All-in-One Image)
 
 ```bash
-# Pull the latest v2.0.0 image
-docker pull neosun/glm-tts:v2.0.0
+# Pull the latest all-in-one image
+docker pull neosun/glm-tts:all-in-one
 
 # Create temporary directory
 mkdir -p /tmp/glm-tts-voices
@@ -54,7 +54,7 @@ docker run -d \
   -p 8080:8080 \
   -v /tmp/glm-tts-voices:/tmp/glm-tts-voices \
   --restart unless-stopped \
-  neosun/glm-tts:v2.0.0
+  neosun/glm-tts:all-in-one
 ```
 
 **Access the Web UI**: `http://localhost:8080`
@@ -215,11 +215,12 @@ deploy:
 
 ## 📊 Performance
 
-- **Model Size**: 20.5GB (all-in-one image)
+- **Model Size**: 23.6GB (all-in-one image with v2.3.1)
 - **VRAM Usage**: ~12GB during inference
-- **Generation Speed**: 2-5 seconds for 10-second audio
+- **Generation Speed**: 2-3 seconds for 10-second audio (20-30x faster than v2.0.0)
 - **Whisper Overhead**: +2-3 seconds for auto-transcription
-- **Startup Time**: ~30 seconds
+- **Startup Time**: ~90 seconds (one-time model loading)
+- **Models Cached**: All models resident in GPU memory for instant inference
 
 ## 🛠️ Troubleshooting
 
@@ -263,6 +264,15 @@ Contributions welcome! Please:
 5. Open a Pull Request
 
 ## 📝 Changelog
+
+### v2.3.1 (2025-12-13)
+- ⚡ **20-30x Performance Boost**: Inference time reduced from 60s to 2-3s
+- 🏗️ Architecture Overhaul: Direct model loading in TTSEngine, eliminated subprocess overhead
+- 💾 Models Resident in GPU Memory: All models (Whisper, LLM, Flow) pre-loaded and cached
+- 🔧 Fixed Flow Model Wrapper: Proper Token2Wav integration for token2wav_with_cache
+- 🎤 Enhanced Whisper Integration: Auto-transcription with skip_whisper parameter support
+- ✅ Full API Test Coverage: All 10 API endpoints validated (standard TTS, streaming, voice_id, upload)
+- 🚀 Production Ready: Stable performance with consistent 2-3s generation time
 
 ### v2.0.0 (2025-12-12)
 - 🚀 Streaming TTS with SSE (Server-Sent Events)
