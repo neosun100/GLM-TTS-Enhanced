@@ -150,10 +150,19 @@ class TTSEngine:
         )
         return wav.detach().cpu(), full_mel
     
-    def generate(self, text, prompt_audio, prompt_text, output_path="output.wav", sample_rate=24000):
+    def generate(self, text, prompt_audio, prompt_text, output_path="output.wav", sample_rate=24000, skip_whisper=False):
         """Generate speech using loaded models"""
         if not self.models_loaded:
             self.load_glm_models(sample_rate=sample_rate)
+        
+        # Auto-transcribe if prompt_text is empty and skip_whisper is False
+        if not prompt_text:
+            if skip_whisper:
+                raise ValueError("prompt_text is required when skip_whisper=True")
+            print("[TTS] prompt_text is empty, using Whisper to transcribe...")
+            prompt_text = self.transcribe_audio(prompt_audio)
+            if not prompt_text:
+                raise ValueError("Whisper transcription failed and no prompt_text provided")
         
         # Text normalization
         prompt_text_norm = self.text_frontend.text_normalize(prompt_text + " ")

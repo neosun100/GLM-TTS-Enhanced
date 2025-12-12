@@ -171,7 +171,8 @@ async def tts_unified(
                 text=text,
                 prompt_audio=ref_audio_path,
                 prompt_text=ref_text,
-                output_path=output_path
+                output_path=output_path,
+                skip_whisper=skip_whisper
             )
             final_output = result[0] if isinstance(result, tuple) else result
             print(f"[Stream] Audio pre-generated: {final_output}")
@@ -223,7 +224,8 @@ async def tts_unified(
             text=text,
             prompt_audio=ref_audio_path,
             prompt_text=ref_text,
-            output_path=output_path
+            output_path=output_path,
+            skip_whisper=skip_whisper
         )
         final_output = result[0] if isinstance(result, tuple) else result
         
