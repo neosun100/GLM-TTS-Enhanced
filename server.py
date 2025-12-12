@@ -158,10 +158,7 @@ def tts():
                 progress_callback=progress_callback,
                 temperature=temperature,
                 top_p=top_p,
-                sampling_strategy=sampling_strategy,
-                emotion_type=emotion,
-                emotion_intensity=emotion_intensity,
-                exaggeration=emotion_intensity
+                sampling_strategy=sampling_strategy
             )
             
         else:
@@ -184,10 +181,7 @@ def tts():
                 skip_whisper=skip_whisper,
                 temperature=temperature,
                 top_p=top_p,
-                sampling_strategy=sampling_strategy,
-                emotion_type=emotion,
-                emotion_intensity=emotion_intensity,
-                exaggeration=emotion_intensity
+                sampling_strategy=sampling_strategy
             )
             
             print(f"[TTS] Generated with new voice_id: {new_voice_id}")
