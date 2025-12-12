@@ -1,30 +1,43 @@
-FROM pytorch/pytorch:2.3.1-cuda12.1-cudnn8-runtime
+# GLM-TTS Enhanced v1.2.0 - All-in-One Docker Image
+FROM nvidia/cuda:12.1.0-cudnn9-runtime-ubuntu22.04
 
-# Install cuDNN 9 for ONNX Runtime
-RUN apt-get update && apt-get install -y wget gnupg2 && \
-    wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb && \
-    dpkg -i cuda-keyring_1.1-1_all.deb && \
-    apt-get update && \
-    apt-get install -y libcudnn9-cuda-12 libcudnn9-dev-cuda-12 && \
-    rm cuda-keyring_1.1-1_all.deb && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
 
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
+    python3.10 \
+    python3-pip \
     git \
-    ffmpeg \
+    wget \
     curl \
+    ffmpeg \
+    libsndfile1 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
+# Copy requirements
 COPY requirements.txt .
-RUN pip3 install --no-cache-dir $(grep -v "^torch" requirements.txt | grep -v "^#") && \
-    pip3 install --no-cache-dir flask flasgger flask-cors onnxruntime-gpu
+RUN pip3 install --no-cache-dir -r requirements.txt
 
-COPY . .
+# Copy application code
+COPY *.py ./
+COPY static/ ./static/
+COPY templates/ ./templates/
 
-ENV PORT=8080
-ENV GPU_IDLE_TIMEOUT=60
-ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
+# Download models (if not using volume mount)
+RUN mkdir -p /app/ckpt
 
+# Create temp directory
+RUN mkdir -p /tmp/glm-tts-voices
+
+# Expose port
+EXPOSE 8080
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8080/health || exit 1
+
+# Run server
 CMD ["python3", "server.py"]
