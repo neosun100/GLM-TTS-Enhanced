@@ -596,7 +596,7 @@ UI_HTML = '''
                 streamData.append('text', text);
                 streamData.append('voice_id', voiceId);
                 
-                const response = await fetch('/api/tts/stream', {
+                const response = await fetch('http://localhost:8081/api/tts/stream', {
                     method: 'POST',
                     body: streamData
                 });

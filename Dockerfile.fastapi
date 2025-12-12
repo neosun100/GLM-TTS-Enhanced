@@ -1,0 +1,14 @@
+# GLM-TTS FastAPI Streaming Service
+FROM neosun/glm-tts:all-in-one-v2
+
+WORKDIR /app
+
+# 安装FastAPI和uvicorn
+RUN pip install fastapi uvicorn python-multipart
+
+# 复制FastAPI服务
+COPY fastapi_streaming.py ./
+
+EXPOSE 8081
+
+CMD ["python3", "fastapi_streaming.py"]
