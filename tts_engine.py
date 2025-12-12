@@ -289,3 +289,69 @@ class TTSEngine:
     def get_cache_stats(self):
         """获取缓存统计信息"""
         return self.voice_cache.get_cache_stats()
+    
+    def preload_models(self):
+        """预加载所有模型到GPU显存"""
+        print("[TTS] Preloading models to GPU...")
+        
+        # 1. 加载Whisper模型
+        self.load_whisper()
+        print("[TTS] ✓ Whisper model loaded")
+        
+        # 2. 通过运行一次推理来加载GLM-TTS模型
+        try:
+            import tempfile
+            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp:
+                tmp_path = tmp.name
+            
+            # 创建一个简单的测试音频
+            import numpy as np
+            import scipy.io.wavfile as wavfile
+            sample_rate = 24000
+            duration = 1  # 1秒
+            t = np.linspace(0, duration, int(sample_rate * duration))
+            audio = (np.sin(2 * np.pi * 440 * t) * 32767).astype(np.int16)
+            wavfile.write(tmp_path, sample_rate, audio)
+            
+            # 运行一次推理来加载模型
+            print("[TTS] Loading GLM-TTS models...")
+            self.generate(
+                text="测试",
+                prompt_audio_path=tmp_path,
+                prompt_text="测试",
+                output_path="/tmp/warmup.wav",
+                skip_whisper=True
+            )
+            print("[TTS] ✓ GLM-TTS models loaded")
+            
+            # 清理临时文件
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+            if os.path.exists("/tmp/warmup.wav"):
+                os.remove("/tmp/warmup.wav")
+                
+        except Exception as e:
+            print(f"[TTS] Warning: Model preload failed: {e}")
+        
+        print("[TTS] ✓ All models preloaded to GPU")
+    
+    def offload_models(self):
+        """从GPU卸载模型释放显存"""
+        print("[TTS] Offloading models from GPU...")
+        
+        # 卸载Whisper
+        if self.whisper_model is not None:
+            del self.whisper_model
+            self.whisper_model = None
+            print("[TTS] ✓ Whisper model offloaded")
+        
+        # 清理GPU缓存
+        try:
+            import torch
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                print("[TTS] ✓ GPU cache cleared")
+        except:
+            pass
+        
+        print("[TTS] ✓ Models offloaded from GPU")

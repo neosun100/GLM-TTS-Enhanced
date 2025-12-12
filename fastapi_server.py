@@ -257,6 +257,55 @@ async def list_emotions():
         ]
     }
 
+# 全局模型缓存
+_models_loaded = False
+_models_cache = None
+
+@app.on_event("startup")
+async def startup_event():
+    """启动时预加载所有模型到显存"""
+    global _models_loaded, _models_cache
+    print("[Startup] Preloading all models to GPU...")
+    try:
+        # 预加载模型
+        await asyncio.to_thread(tts_engine.preload_models)
+        _models_loaded = True
+        print("[Startup] ✓ All models loaded to GPU successfully!")
+    except Exception as e:
+        print(f"[Startup] ✗ Failed to preload models: {e}")
+        _models_loaded = False
+
+@app.get("/api/gpu/status")
+async def gpu_status():
+    """GPU状态"""
+    try:
+        import torch
+        if torch.cuda.is_available():
+            gpu_memory_used = torch.cuda.memory_allocated(0) / 1024**3  # GB
+            gpu_memory_total = torch.cuda.get_device_properties(0).total_memory / 1024**3  # GB
+            return {
+                "loaded": _models_loaded,
+                "gpu_memory_used": f"{gpu_memory_used:.2f}",
+                "gpu_memory_total": f"{gpu_memory_total:.2f}"
+            }
+    except:
+        pass
+    return {"loaded": _models_loaded, "gpu_memory_used": 0, "gpu_memory_total": 0}
+
+@app.post("/api/gpu/offload")
+async def gpu_offload():
+    """释放GPU显存"""
+    global _models_loaded
+    try:
+        await asyncio.to_thread(tts_engine.offload_models)
+        _models_loaded = False
+        import torch
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        return {"status": "ok", "message": "Models offloaded from GPU"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv('PORT', 8080))
