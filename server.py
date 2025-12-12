@@ -126,8 +126,13 @@ def tts():
         top_p = float(request.form.get('top_p', 0.9))
         skip_whisper = request.form.get('skip_whisper', '0') == '1'
         
+        # v1.2.0: 情感参数
+        emotion = request.form.get('emotion', 'neutral')
+        emotion_intensity = float(request.form.get('emotion_intensity', 0.0))
+        
         print(f"[TTS] text={text}, voice_id={voice_id}, prompt_text={prompt_text}, has_file={prompt_file is not None}")
         print(f"[TTS] Advanced: strategy={sampling_strategy}, temp={temperature}, top_p={top_p}, skip_whisper={skip_whisper}")
+        print(f"[TTS] Emotion: {emotion} (intensity={emotion_intensity})")
         
         if not text:
             return jsonify({'error': 'text is required', 'task_id': task_id}), 400
@@ -153,7 +158,10 @@ def tts():
                 progress_callback=progress_callback,
                 temperature=temperature,
                 top_p=top_p,
-                sampling_strategy=sampling_strategy
+                sampling_strategy=sampling_strategy,
+                emotion_type=emotion,
+                emotion_intensity=emotion_intensity,
+                exaggeration=emotion_intensity
             )
             
         else:
@@ -176,7 +184,10 @@ def tts():
                 skip_whisper=skip_whisper,
                 temperature=temperature,
                 top_p=top_p,
-                sampling_strategy=sampling_strategy
+                sampling_strategy=sampling_strategy,
+                emotion_type=emotion,
+                emotion_intensity=emotion_intensity,
+                exaggeration=emotion_intensity
             )
             
             print(f"[TTS] Generated with new voice_id: {new_voice_id}")
@@ -269,8 +280,8 @@ UI_HTML = '''
 <body>
     <div class="container">
         <div class="header">
-            <h1>🎙️ GLM-TTS</h1>
-            <p>零样本语音克隆系统</p>
+            <h1>🎙️ GLM-TTS v1.2.0</h1>
+            <p>零样本语音克隆系统 + 情感控制</p>
         </div>
         
         <div class="card">
@@ -296,6 +307,29 @@ UI_HTML = '''
                     <label>参考文本（可选，留空自动识别）</label>
                     <input type="text" id="prompt-text" placeholder="留空将使用Whisper自动识别参考音频内容">
                 </div>
+                
+                <details open style="margin-bottom: 20px;">
+                    <summary style="cursor: pointer; font-weight: 500; margin-bottom: 10px;">🎭 情感控制 (v1.2.0新增)</summary>
+                    <div style="padding: 10px; background: #2a2a2a; border-radius: 6px;">
+                        <div class="form-group">
+                            <label>情感类型</label>
+                            <select id="emotion" style="width: 100%; padding: 10px; background: #1a1a1a; color: #e0e0e0; border: 1px solid #333; border-radius: 6px;">
+                                <option value="neutral">😐 中性 - 新闻播报、说明文档</option>
+                                <option value="happy" selected>😊 快乐 - 广告、祝福语音</option>
+                                <option value="sad">😢 悲伤 - 悼词、抒情内容</option>
+                                <option value="angry">😠 愤怒 - 辩论、强调语气</option>
+                                <option value="excited">🤩 兴奋 - 促销、激励演讲</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>情感强度: <span id="emotion-intensity-value">0.7</span></label>
+                            <input type="range" id="emotion-intensity" min="0.0" max="1.0" step="0.1" value="0.7" 
+                                   oninput="document.getElementById('emotion-intensity-value').textContent=this.value"
+                                   style="width: 100%;">
+                            <small style="color: #888;">0.0=无情感，1.0=最强情感</small>
+                        </div>
+                    </div>
+                </details>
                 
                 <details style="margin-bottom: 20px;">
                     <summary style="cursor: pointer; font-weight: 500; margin-bottom: 10px;">⚙️ 高级参数（可选）</summary>
@@ -378,6 +412,8 @@ UI_HTML = '''
             formData.append('text', document.getElementById('text').value);
             formData.append('prompt_audio', document.getElementById('prompt-audio').files[0]);
             formData.append('prompt_text', document.getElementById('prompt-text').value);
+            formData.append('emotion', document.getElementById('emotion').value);
+            formData.append('emotion_intensity', document.getElementById('emotion-intensity').value);
             formData.append('sampling_strategy', document.getElementById('sampling-strategy').value);
             formData.append('temperature', document.getElementById('temperature').value);
             formData.append('top_p', document.getElementById('top-p').value);
