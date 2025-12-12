@@ -1,10 +1,10 @@
-# GLM-TTS Enhanced v2.0.0 - All-in-One Docker Image
+# GLM-TTS Enhanced v2.1.2 - All-in-One Docker Image
 FROM nvidia/cuda:12.1.0-cudnn8-runtime-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 
-# Install system dependencies
+# Install system dependencies and cuDNN 9
 RUN apt-get update && apt-get install -y \
     python3.10 \
     python3-pip \
@@ -13,6 +13,12 @@ RUN apt-get update && apt-get install -y \
     curl \
     ffmpeg \
     libsndfile1 \
+    && wget https://developer.download.nvidia.com/compute/cudnn/9.0.0/local_installers/cudnn-local-repo-ubuntu2204-9.0.0_1.0-1_amd64.deb \
+    && dpkg -i cudnn-local-repo-ubuntu2204-9.0.0_1.0-1_amd64.deb \
+    && cp /var/cudnn-local-repo-ubuntu2204-9.0.0/cudnn-*-keyring.gpg /usr/share/keyrings/ \
+    && apt-get update \
+    && apt-get install -y libcudnn9-cuda-12 libcudnn9-dev-cuda-12 \
+    && rm cudnn-local-repo-ubuntu2204-9.0.0_1.0-1_amd64.deb \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

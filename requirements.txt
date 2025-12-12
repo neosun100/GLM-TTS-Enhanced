@@ -11,7 +11,6 @@ train==0.0.5
 transformers==4.57.3
 wandb==0.16.6
 WeTextProcessing==1.0.3
-ttsfrd==0.1.0
 x_transformers==1.42.26
 zhconv==1.4.3
 zhon==2.1.1
