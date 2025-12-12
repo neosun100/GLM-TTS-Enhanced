@@ -4,72 +4,109 @@ This document records all development milestones, feature additions, and technic
 
 ---
 
-## 2025-12-12 - v1.2.0: 情感控制与流式推理 (规划中)
+## 2025-12-12 - v1.2.0: 情感控制与流式推理 (开发中)
 
 ### Summary
 基于智谱AI官方文章，实现GLM-TTS的三大核心增强：情感控制、流式推理和并发优化。与v1.1.0的voice cache系统协同，提供生产级实时语音合成能力。
 
-### Features Planned
-- **情感控制系统** (`emotion_control.py`)
-  - 5种预设情感：neutral, happy, sad, angry, excited
-  - 情感强度调节：0.0-1.0范围
-  - GRPO多奖励优化集成
-  - API端点：`POST /api/voices/{voice_id}/emotion`
+### ✅ 已完成功能
 
-- **流式推理引擎** (`streaming_engine.py`)
-  - SSE流式音频输出
-  - 分句处理：自动按标点分割
-  - <200ms首字节延迟
-  - Base64编码安全传输
-  - API端点：`POST /api/tts/stream`
+#### 1. 情感控制系统 (Emotion Control) - 已实现
+- **模块**: `emotion_control.py` (60行)
+- **API**: `emotion_streaming_api.py` (90行)
+- **功能**:
+  - 5种预设情感：neutral(0.0), happy(0.7), sad(0.6), angry(0.8), excited(0.9)
+  - 情感强度调节：0.0-1.0范围，支持自定义
+  - 实时切换：无需重启服务
+  - API端点：
+    - `GET /api/emotions` - 列出所有情感类型
+    - `POST /api/voices/{voice_id}/emotion` - 设置语音情感
 
-- **并发优化**
-  - 请求队列管理
-  - GPU资源池
-  - 理论支持12路并发
-  - 优先级调度（voice_id缓存优先）
+- **测试结果** (test_emotion_simple.py):
+  ```
+  ✓ 列出情感类型 - 5种情感
+  ✓ 设置情感 - happy (强度: 0.8)
+  ✓ 切换情感 - excited/sad/neutral
+  ```
+
+- **集成状态**: 已集成到server.py，通过Blueprint注册
+
+### 🚧 进行中功能
+
+#### 2. 流式推理 (Streaming Inference) - 部分实现
+- **模块**: `streaming_engine.py` (120行)
+- **状态**: 核心逻辑已完成，SSE推送需要调试
+- **功能**:
+  - 分句处理：按标点符号自动分割
+  - SSE协议：text/event-stream格式
+  - Base64编码：安全传输音频数据
+  - API端点：
+    - `POST /api/tts/stream` - 流式TTS生成
+    - `GET /api/tts/stream/status` - 查询状态
+    - `POST /api/tts/stream/stop` - 停止生成
+
+- **待解决问题**:
+  - SSE连接过早关闭（ChunkedEncodingError）
+  - 需要优化音频块生成逻辑
+
+#### 3. 并发优化 - 未开始
+- 请求队列管理
+- GPU资源池
+- 优先级调度
 
 ### Technical Details
-- **情感参数**
-  - `emotion_type`: 情感类型
-  - `emotion_intensity`: 情感强度
-  - `exaggeration`: GRPO夸张参数
-  
-- **流式架构**
-  ```
-  文本 → 分句 → 逐句TTS → Base64 → SSE推送
-           ↓
-       情感参数注入
+- **情感参数传递**:
+  ```python
+  emotion_params = {
+      'emotion_type': 'happy',
+      'emotion_intensity': 0.8,
+      'exaggeration': 0.8  # GRPO参数
+  }
   ```
 
-- **性能目标**
-  - 首字节延迟：<200ms
-  - 并发能力：12路（双GPU）
-  - 情感切换：实时无延迟
+- **Docker集成**:
+  - 挂载新模块：emotion_control.py, streaming_engine.py, emotion_streaming_api.py
+  - 无需重新构建镜像，热加载代码
 
-### API Endpoints
-- `GET /api/emotions` - 列出所有情感类型
-- `POST /api/voices/{voice_id}/emotion` - 设置语音情感
-- `POST /api/tts/stream` - 流式TTS生成
-- `GET /api/tts/stream/status` - 查询流式状态
-- `POST /api/tts/stream/stop` - 停止流式生成
+### API Endpoints (已实现)
+| 端点 | 方法 | 状态 | 描述 |
+|-----|------|------|------|
+| `/api/emotions` | GET | ✅ | 列出所有情感类型 |
+| `/api/voices/{voice_id}/emotion` | POST | ✅ | 设置语音情感 |
+| `/api/tts/stream` | POST | 🚧 | 流式TTS生成 |
+| `/api/tts/stream/status` | GET | 🚧 | 查询流式状态 |
+| `/api/tts/stream/stop` | POST | 🚧 | 停止流式生成 |
 
 ### Integration with v1.1.0
-- voice_id缓存自动应用情感配置
-- 流式模式优先使用缓存特征
-- 情感参数保存到voice metadata
+- ✅ 情感参数已添加到tts_engine.py的generate_with_voice_id()方法
+- ✅ 支持voice_id + emotion组合使用
+- ⏳ 情感配置保存到voice metadata（待实现）
 
 ### Documentation
-- `EMOTION_STREAMING_GUIDE.md` - 使用指南
-- `test_emotion_streaming.py` - 测试脚本
+- ✅ `EMOTION_STREAMING_GUIDE.md` - 完整使用指南
+- ✅ `test_emotion_simple.py` - 简化测试脚本
+- ⏳ `test_emotion_streaming.py` - 完整测试（流式部分待修复）
 
 ### Reference
 - 智谱AI官方文章：GLM-TTS效果超index-tts2
 - 论文：GRPO多奖励优化
 - 性能指标：<200ms延迟，12路并发
 
+### Git Commits
+- `93ed018` - 初始实现（情感控制+流式推理模块）
+- `d97c2dd` - 情感控制系统测试通过
+
+### Next Steps
+1. 修复流式推理的SSE连接问题
+2. 实现并发优化和GPU资源池
+3. 完善情感参数到voice metadata的持久化
+4. 性能测试：验证<200ms延迟目标
+5. 构建v1.2.0 Docker镜像
+
 ### Status
-🚧 开发中 - 核心模块已创建，待集成测试
+🟢 情感控制：生产就绪  
+🟡 流式推理：核心完成，调试中  
+🔴 并发优化：未开始
 
 ---
 
