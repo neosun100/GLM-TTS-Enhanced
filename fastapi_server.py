@@ -103,17 +103,17 @@ async def tts_unified(
     request: Request,
     text: str = Form(...),
     voice_id: str = Form(...),
+    prompt_text: str = Form(None),
     temperature: float = Form(0.3),
     top_p: float = Form(0.7),
     top_k: int = Form(20),
     skip_whisper: bool = Form(False)
 ):
-    """
-    统一TTS接口 - 根据Accept头返回不同格式
-    Accept: application/json -> 传统模式
-    Accept: text/event-stream -> 流式模式
-    """
-    accept = request.headers.get('accept', 'application/json')
+    """统一TTS接口"""
+    accept = request.headers.get('accept', 'application/json').lower()
+    is_stream = 'text/event-stream' in accept
+    
+    print(f"[TTS] Request - Accept: {accept}, Stream: {is_stream}, Text: {text[:30]}...")
     
     # 加载语音数据
     json_path = os.path.join(TEMP_DIR, "references", f"{voice_id}.json")
@@ -124,87 +124,101 @@ async def tts_unified(
         voice_data = json.load(f)
     
     ref_audio_path = os.path.join(TEMP_DIR, "references", f"{voice_id}.wav")
-    ref_text = voice_data.get('text', '')
+    ref_text = prompt_text if prompt_text else voice_data.get('text', '')
+    
+    # 生成输出路径
+    import time
+    timestamp = int(time.time() * 1000)
+    output_filename = f"output_{timestamp}.wav"
+    output_path = os.path.join(TEMP_DIR, "outputs", output_filename)
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
     
     # 流式模式
-    if 'text/event-stream' in accept:
-        async def generate_stream():
+    if is_stream:
+        print("[Stream] Entering streaming mode")
+        
+        # 预先生成音频（在生成器外部）
+        print("[Stream] Pre-generating audio...")
+        try:
+            result = await asyncio.to_thread(
+                tts_engine.generate,
+                text=text,
+                prompt_audio_path=ref_audio_path,
+                prompt_text=ref_text,
+                output_path=output_path,
+                temperature=temperature,
+                top_p=top_p,
+                skip_whisper=skip_whisper
+            )
+            final_output = result[0] if isinstance(result, tuple) else result
+            print(f"[Stream] Audio pre-generated: {final_output}")
+        except Exception as e:
+            print(f"[Stream] Pre-generation failed: {e}")
+            raise HTTPException(status_code=500, detail=f"TTS failed: {str(e)}")
+        
+        # 生成器只负责流式发送已生成的音频
+        async def stream_generator():
             try:
-                # 生成音频
-                output_path = await asyncio.to_thread(
-                    tts_engine.generate,
-                    text=text,
-                    ref_audio_path=ref_audio_path,
-                    ref_text=ref_text,
-                    temperature=temperature,
-                    top_p=top_p,
-                    top_k=top_k,
-                    skip_whisper=skip_whisper
-                )
+                print("[Stream] Starting stream...")
                 
-                # 读取音频文件
-                with open(output_path, 'rb') as f:
+                # 读取音频
+                with open(final_output, 'rb') as f:
                     audio_data = f.read()
                 
-                # 分块推送 (每秒音频 = 48000字节)
+                import base64
                 chunk_size = 48000
                 total_chunks = (len(audio_data) + chunk_size - 1) // chunk_size
+                print(f"[Stream] Streaming {total_chunks} chunks")
                 
+                # 发送音频块
                 for i in range(total_chunks):
                     chunk = audio_data[i * chunk_size:(i + 1) * chunk_size]
-                    import base64
                     chunk_b64 = base64.b64encode(chunk).decode('utf-8')
-                    
-                    event_data = {
-                        "type": "chunk",
-                        "index": i,
-                        "audio": chunk_b64,
-                        "format": "raw_pcm",
-                        "sample_rate": 24000,
-                        "channels": 1,
-                        "sample_width": 2
-                    }
-                    
-                    yield f"data: {json.dumps(event_data)}\n\n"
-                    await asyncio.sleep(0.1)
+                    yield f"data: {json.dumps({'type': 'chunk', 'index': i, 'total': total_chunks, 'audio': chunk_b64})}\n\n"
+                    await asyncio.sleep(0.05)
                 
-                # 完成
-                yield f"data: {json.dumps({'type': 'done'})}\n\n"
+                # 完成事件
+                rel_path = os.path.relpath(final_output, TEMP_DIR)
+                yield f"data: {json.dumps({'type': 'complete', 'audio_url': f'/voices/{rel_path}'})}\n\n"
+                print("[Stream] Stream completed")
                 
             except Exception as e:
+                print(f"[Stream] Stream error: {e}")
                 yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
         
         return StreamingResponse(
-            generate_stream(),
-            media_type='text/event-stream',
-            headers={
-                'Cache-Control': 'no-cache',
-                'X-Accel-Buffering': 'no'
-            }
+            stream_generator(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
         )
     
     # 传统模式
-    else:
-        try:
-            output_path = await asyncio.to_thread(
-                tts_engine.generate,
-                text=text,
-                ref_audio_path=ref_audio_path,
-                ref_text=ref_text,
-                temperature=temperature,
-                top_p=top_p,
-                top_k=top_k,
-                skip_whisper=skip_whisper
-            )
-            
-            filename = os.path.basename(output_path)
-            return {
-                "success": True,
-                "audio_url": f"/voices/{filename}",
-                "filename": filename
-            }
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+    print("[TTS] Entering traditional mode")
+    try:
+        result = await asyncio.to_thread(
+            tts_engine.generate,
+            text=text,
+            prompt_audio_path=ref_audio_path,
+            prompt_text=ref_text,
+            output_path=output_path,
+            temperature=temperature,
+            top_p=top_p,
+            skip_whisper=skip_whisper
+        )
+        final_output = result[0] if isinstance(result, tuple) else result
+        
+        rel_path = os.path.relpath(final_output, TEMP_DIR)
+        filename = os.path.basename(final_output)
+        print(f"[TTS] Generated: {filename}")
+        
+        return {
+            "success": True,
+            "audio_url": f"/voices/{rel_path}",
+            "filename": filename
+        }
+    except Exception as e:
+        print(f"[TTS] Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/emotions")
 async def list_emotions():
@@ -220,4 +234,4 @@ async def list_emotions():
 if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv('PORT', 8080))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    uvicorn.run(app, host="0.0.0.0", port=port, reload=False)
