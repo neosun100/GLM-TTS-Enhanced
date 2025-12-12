@@ -29,14 +29,6 @@ def set_voice_emotion(voice_id):
     try:
         result = emotion_controller.set_emotion(emotion_type, intensity)
         
-        # 保存到voice cache metadata
-        from server import tts_engine
-        voice_info = tts_engine.voice_cache.get_voice(voice_id)
-        if voice_info:
-            metadata = voice_info.get('metadata', {})
-            metadata['emotion'] = result
-            # 更新缓存（简化版，实际需要完整实现）
-            
         return jsonify({
             'success': True,
             'voice_id': voice_id,

@@ -15,6 +15,10 @@ services:
       - "0.0.0.0:8080:8080"
     volumes:
       - /tmp/glm-tts-voices:/tmp/glm-tts-voices
+      - ./emotion_control.py:/app/emotion_control.py
+      - ./streaming_engine.py:/app/streaming_engine.py
+      - ./emotion_streaming_api.py:/app/emotion_streaming_api.py
+      - ./server.py:/app/server.py
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
