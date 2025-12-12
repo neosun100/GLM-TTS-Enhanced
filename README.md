@@ -37,8 +37,8 @@ Enhanced version of GLM-TTS with production-ready features: Web UI, REST API, Wh
 ### Using Docker (All-in-One Image)
 
 ```bash
-# Pull the latest all-in-one image
-docker pull neosun/glm-tts:all-in-one
+# Pull the latest v2.3.1 image
+docker pull neosun/glm-tts:all-in-one-fastapi-v2.3.1
 
 # Create temporary directory
 mkdir -p /tmp/glm-tts-voices
@@ -54,7 +54,7 @@ docker run -d \
   -p 8080:8080 \
   -v /tmp/glm-tts-voices:/tmp/glm-tts-voices \
   --restart unless-stopped \
-  neosun/glm-tts:all-in-one
+  neosun/glm-tts:all-in-one-fastapi-v2.3.1
 ```
 
 **Access the Web UI**: `http://localhost:8080`
