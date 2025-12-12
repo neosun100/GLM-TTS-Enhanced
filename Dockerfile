@@ -23,6 +23,9 @@ RUN pip3 install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY *.py ./
+COPY utils/ ./utils/
+COPY llm/ ./llm/
+COPY cosyvoice/ ./cosyvoice/
 COPY static/ ./static/
 COPY templates/ ./templates/
 
@@ -31,11 +34,7 @@ RUN mkdir -p /app/ckpt && \
     mkdir -p /app/examples && \
     cd /app && \
     git clone --depth=1 https://www.modelscope.cn/iic/CosyVoice-300M.git ckpt/CosyVoice-300M && \
-    git clone --depth=1 https://www.modelscope.cn/ZhipuAI/glm-4-voice-9b.git ckpt/glm-4-voice-9b && \
-    git clone --depth=1 https://github.com/FunAudioLLM/CosyVoice.git /tmp/cosyvoice && \
-    cp -r /tmp/cosyvoice/cosyvoice /app/ && \
-    cp -r /tmp/cosyvoice/third_party /app/ && \
-    rm -rf /tmp/cosyvoice
+    git clone --depth=1 https://www.modelscope.cn/ZhipuAI/glm-4-voice-9b.git ckpt/glm-4-voice-9b
 
 # Create temp directory
 RUN mkdir -p /tmp/glm-tts-voices
