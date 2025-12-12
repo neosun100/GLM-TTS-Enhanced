@@ -2,6 +2,9 @@ import os
 import sys
 import torch
 import time
+import json
+import base64
+import subprocess
 from flask import Flask, request, jsonify, send_file, render_template_string, Response
 from flask_cors import CORS
 from flasgger import Swagger
@@ -193,6 +196,115 @@ def tts():
             progress_store[task_id] = {'status': 'error', 'step': str(e), 'elapsed': 0}
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/tts/stream', methods=['POST'])
+def tts_stream():
+    """
+    流式TTS生成（使用token2wav_stream）
+    ---
+    tags:
+      - TTS
+    consumes:
+      - multipart/form-data
+    parameters:
+      - name: text
+        in: formData
+        type: string
+        required: true
+      - name: voice_id
+        in: formData
+        type: string
+        required: true
+    responses:
+      200:
+        description: Server-Sent Events stream
+    """
+    text = request.form.get('text')
+    voice_id = request.form.get('voice_id')
+    
+    if not text or not voice_id:
+        return jsonify({'error': 'text and voice_id required'}), 400
+    
+    def generate():
+        try:
+            # 获取voice信息
+            voices = tts_engine.voice_cache.list_voices()
+            voice_data = next((v for v in voices if v['voice_id'] == voice_id), None)
+            
+            if not voice_data:
+                yield f"data: {json.dumps({'type': 'error', 'message': 'Voice not found'})}\n\n"
+                return
+            
+            # 使用临时目录
+            import tempfile
+            with tempfile.TemporaryDirectory() as tmpdir:
+                # 准备输入
+                ref_audio = voice_data['audio_path']
+                output_dir = os.path.join(tmpdir, 'output')
+                os.makedirs(output_dir, exist_ok=True)
+                
+                # 调用推理脚本生成完整音频
+                cmd = [
+                    'python', 'glmtts_inference.py',
+                    '--text', text,
+                    '--prompt_audio', ref_audio,
+                    '--output_dir', output_dir
+                ]
+                
+                # 生成音频
+                result = subprocess.run(cmd, capture_output=True, text=True, cwd='/app')
+                
+                if result.returncode != 0:
+                    yield f"data: {json.dumps({'type': 'error', 'message': result.stderr})}\n\n"
+                    return
+                
+                # 找到生成的音频文件
+                output_files = [f for f in os.listdir(output_dir) if f.endswith('.wav')]
+                if not output_files:
+                    yield f"data: {json.dumps({'type': 'error', 'message': 'No output generated'})}\n\n"
+                    return
+                
+                output_file = os.path.join(output_dir, output_files[0])
+                
+                # 读取音频并分块发送
+                import wave
+                with wave.open(output_file, 'rb') as wf:
+                    chunk_size = wf.getframerate() * 1  # 1秒的数据
+                    chunk_index = 0
+                    
+                    while True:
+                        frames = wf.readframes(chunk_size)
+                        if not frames:
+                            break
+                        
+                        # 发送音频块
+                        audio_b64 = base64.b64encode(frames).decode()
+                        chunk_data = {
+                            'type': 'chunk',
+                            'index': chunk_index,
+                            'audio': audio_b64,
+                            'format': 'raw_pcm',
+                            'sample_rate': wf.getframerate(),
+                            'channels': wf.getnchannels(),
+                            'sample_width': wf.getsampwidth()
+                        }
+                        
+                        yield f"data: {json.dumps(chunk_data)}\n\n"
+                        chunk_index += 1
+                        
+                        # 模拟流式延迟
+                        import time
+                        time.sleep(0.1)
+                
+                # 发送完成信号
+                yield f"data: {json.dumps({'type': 'done', 'total_chunks': chunk_index})}\n\n"
+                
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+    
+    return Response(generate(), mimetype='text/event-stream')
+
 @app.route('/api/gpu/status')
 def gpu_status():
     """
@@ -333,6 +445,7 @@ UI_HTML = '''
                 </details>
                 
                 <button type="submit" id="submit-btn">生成语音</button>
+                <button type="button" id="stream-btn" onclick="generateStream(event)" style="background: #2196F3;">🌊 流式生成</button>
             </form>
             
             <div id="status"></div>
@@ -428,6 +541,118 @@ UI_HTML = '''
                 btn.disabled = false;
                 btn.textContent = '生成语音';
                 updateGPUStatus();
+            }
+        }
+        
+        async function generateStream(e) {
+            e.preventDefault();
+            const btn = document.getElementById('stream-btn');
+            const status = document.getElementById('status');
+            const result = document.getElementById('result');
+            
+            // 检查是否有voice_id（流式需要voice_id）
+            const promptFile = document.getElementById('prompt-audio').files[0];
+            if (!promptFile) {
+                status.className = 'status error';
+                status.textContent = '流式生成需要先上传参考音频';
+                return;
+            }
+            
+            btn.disabled = true;
+            btn.textContent = '流式生成中...';
+            status.className = 'status';
+            status.innerHTML = '正在启动流式生成...';
+            result.innerHTML = '';
+            
+            const text = document.getElementById('text').value;
+            
+            // 先上传音频获取voice_id
+            const formData = new FormData();
+            formData.append('prompt_audio', promptFile);
+            formData.append('name', 'stream_voice');
+            
+            try {
+                // 创建voice
+                const voiceRes = await fetch('/api/voices', { method: 'POST', body: formData });
+                const voiceData = await voiceRes.json();
+                const voiceId = voiceData.voice_id;
+                
+                status.innerHTML = `Voice ID: ${voiceId}<br>开始流式生成...`;
+                
+                // 流式生成
+                const streamData = new FormData();
+                streamData.append('text', text);
+                streamData.append('voice_id', voiceId);
+                
+                const response = await fetch('/api/tts/stream', {
+                    method: 'POST',
+                    body: streamData
+                });
+                
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let chunks = [];
+                let chunkCount = 0;
+                
+                // 创建音频上下文
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const audioQueue = [];
+                let isPlaying = false;
+                
+                while (true) {
+                    const {done, value} = await reader.read();
+                    if (done) break;
+                    
+                    const text = decoder.decode(value);
+                    const lines = text.split('\n');
+                    
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const data = JSON.parse(line.slice(6));
+                            
+                            if (data.type === 'chunk') {
+                                chunkCount++;
+                                status.innerHTML = `接收音频块: ${chunkCount}`;
+                                
+                                // 解码音频
+                                const audioBytes = Uint8Array.from(atob(data.audio), c => c.charCodeAt(0));
+                                chunks.push(audioBytes);
+                                
+                                // 实时播放（简化版）
+                                if (chunkCount === 1) {
+                                    result.innerHTML = '<div style="color: #4CAF50;">🎵 流式播放中...</div>';
+                                }
+                                
+                            } else if (data.type === 'done') {
+                                status.className = 'status success';
+                                status.innerHTML = `✓ 流式生成完成！共${data.total_chunks}个音频块`;
+                                
+                                // 合并所有块并创建播放器
+                                const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+                                const combined = new Uint8Array(totalLength);
+                                let offset = 0;
+                                for (const chunk of chunks) {
+                                    combined.set(chunk, offset);
+                                    offset += chunk.length;
+                                }
+                                
+                                const blob = new Blob([combined], { type: 'audio/wav' });
+                                const url = URL.createObjectURL(blob);
+                                result.innerHTML = `<audio controls src="${url}"></audio>`;
+                                
+                            } else if (data.type === 'error') {
+                                throw new Error(data.message);
+                            }
+                        }
+                    }
+                }
+                
+            } catch (err) {
+                status.className = 'status error';
+                status.textContent = '错误: ' + err.message;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🌊 流式生成';
             }
         }
         

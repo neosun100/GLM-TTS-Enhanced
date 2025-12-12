@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   glm-tts:
-    image: neosun/glm-tts:v1.2.0
+    image: neosun/glm-tts:v1.3.0
     container_name: glm-tts
     runtime: nvidia
     environment:
