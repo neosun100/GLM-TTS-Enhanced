@@ -9,7 +9,7 @@
 
 GLM-TTS の強化版で、本番環境対応機能を提供：Web UI、REST API、Whisper 自動文字起こし、Docker デプロイメント。
 
-![GLM-TTS Enhanced UI](https://img.aws.xin/uPic/kMHzYn.png)
+![GLM-TTS Enhanced UI](https://img.aws.xin/uPic/YD5e2C.png)
 
 ## ✨ 強化機能
 

@@ -9,7 +9,7 @@
 
 GLM-TTS 的增强版本，提供生产级功能：Web UI、REST API、Whisper 自动转录和 Docker 部署。
 
-![GLM-TTS Enhanced UI](https://img.aws.xin/uPic/kMHzYn.png)
+![GLM-TTS Enhanced UI](https://img.aws.xin/uPic/YD5e2C.png)
 
 ## ✨ 增强功能
 

@@ -9,7 +9,7 @@
 
 Enhanced version of GLM-TTS with production-ready features: Web UI, REST API, Whisper auto-transcription, and Docker deployment.
 
-![GLM-TTS Enhanced UI](https://img.aws.xin/uPic/kMHzYn.png)
+![GLM-TTS Enhanced UI](https://img.aws.xin/uPic/YD5e2C.png)
 
 ## ✨ Enhanced Features
 
