@@ -18,7 +18,7 @@ GLM-TTS 的增強版本，提供生產級功能：Web UI、REST API、Whisper �
 - **🔌 REST API**：完整的 API，Swagger 文件位於 `/apidocs`
 - **🎤 Whisper 整合**：參考文字為空時自動音訊轉錄
 - **📊 即時進度**：基於 SSE 的串流傳輸，顯示耗時
-- **🐳 一體化 Docker**：20.5GB 映像包含所有模型和依賴
+- **🐳 一體化 Docker**：23.6GB 映像包含所有模型和依賴
 - **⚡ GPU 優化**：cuDNN 9 支援 ONNX Runtime GPU 加速
 - **💾 持久化儲存**：掛載主機目錄進行檔案管理
 - **🔧 進階控制**：Temperature、Top-p 和採樣策略參數
@@ -37,8 +37,8 @@ GLM-TTS 的增強版本，提供生產級功能：Web UI、REST API、Whisper �
 ### 使用 Docker（一體化映像）
 
 ```bash
-# 拉取一體化映像
-docker pull neosun/glm-tts:all-in-one
+# 拉取最新 v2.3.1 映像
+docker pull neosun/glm-tts:all-in-one-fastapi-v2.3.1
 
 # 建立臨時目錄
 mkdir -p /tmp/glm-tts-voices
@@ -54,7 +54,7 @@ docker run -d \
   -p 8080:8080 \
   -v /tmp/glm-tts-voices:/tmp/glm-tts-voices \
   --restart unless-stopped \
-  neosun/glm-tts:all-in-one
+  neosun/glm-tts:all-in-one-fastapi-v2.3.1
 ```
 
 **存取 Web 介面**：`http://localhost:8080`
@@ -215,11 +215,12 @@ deploy:
 
 ## 📊 效能
 
-- **模型大小**：20.5GB（一體化映像）
+- **模型大小**：23.6GB（v2.3.1一體化映像）
 - **顯存使用**：推理時約 12GB
-- **生成速度**：10 秒音訊需 2-5 秒
+- **生成速度**：10秒音訊需2-3秒（比v2.0.0快20-30倍）
 - **Whisper 開銷**：自動轉錄增加 2-3 秒
-- **啟動時間**：約 30 秒
+- **啟動時間**：約90秒（一次性模型載入）
+- **模型快取**：所有模型常駐GPU記憶體，實現即時推理
 
 ## 🛠️ 故障排除
 
@@ -263,6 +264,23 @@ docker push your-registry/glm-tts:latest
 5. 開啟 Pull Request
 
 ## 📝 更新日誌
+
+### v2.3.1 (2025-12-13)
+- ⚡ **20-30倍效能提升**：推理時間從60秒降至2-3秒
+- 🏗️ 架構重構：TTSEngine直接載入模型，消除subprocess開銷
+- 💾 模型常駐GPU記憶體：所有模型（Whisper、LLM、Flow）預載入並快取
+- 🔧 修復Flow模型包裝：正確整合Token2Wav實現token2wav_with_cache
+- 🎤 增強Whisper整合：支援skip_whisper參數的自動轉錄
+- ✅ 完整API測試覆蓋：驗證所有10個API端點（標準TTS、串流、voice_id、上傳）
+- 🚀 生產就緒：穩定效能，生成時間穩定在2-3秒
+
+### v2.0.0 (2025-12-12)
+- 🚀 SSE串流TTS（伺服器推送事件）
+- ⚡ 非同步最佳化的預生成架構
+- 🎵 即時音訊區塊傳輸
+- 🔄 FastAPI框架遷移
+- 📡 標準和串流TTS雙模式
+- 🎯 生產就緒的串流管線
 
 ### v1.0.0 (2025-12-12)
 - ✨ 初始增強版本發布
