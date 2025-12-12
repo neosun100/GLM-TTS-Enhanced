@@ -233,15 +233,15 @@ async def tts_unified(
         )
         final_output = result[0] if isinstance(result, tuple) else result
         
-        rel_path = os.path.relpath(final_output, TEMP_DIR)
         filename = os.path.basename(final_output)
         print(f"[TTS] Generated: {filename}")
         
-        return {
-            "success": True,
-            "audio_url": f"/voices/{rel_path}",
-            "filename": filename
-        }
+        # 返回音频文件
+        return FileResponse(
+            final_output,
+            media_type="audio/wav",
+            filename=filename
+        )
     except Exception as e:
         print(f"[TTS] Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
