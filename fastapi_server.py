@@ -169,12 +169,9 @@ async def tts_unified(
             result = await asyncio.to_thread(
                 tts_engine.generate,
                 text=text,
-                prompt_audio_path=ref_audio_path,
+                prompt_audio=ref_audio_path,
                 prompt_text=ref_text,
-                output_path=output_path,
-                temperature=temperature,
-                top_p=top_p,
-                skip_whisper=skip_whisper
+                output_path=output_path
             )
             final_output = result[0] if isinstance(result, tuple) else result
             print(f"[Stream] Audio pre-generated: {final_output}")
@@ -224,12 +221,9 @@ async def tts_unified(
         result = await asyncio.to_thread(
             tts_engine.generate,
             text=text,
-            prompt_audio_path=ref_audio_path,
+            prompt_audio=ref_audio_path,
             prompt_text=ref_text,
-            output_path=output_path,
-            temperature=temperature,
-            top_p=top_p,
-            skip_whisper=skip_whisper
+            output_path=output_path
         )
         final_output = result[0] if isinstance(result, tuple) else result
         

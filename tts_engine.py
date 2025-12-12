@@ -1,21 +1,102 @@
 import os
-import subprocess
-import json
-import tempfile
-import shutil
-import time
+import torch
+import torchaudio
 import whisper
 from voice_cache import VoiceCacheManager
+from cosyvoice.cli.frontend import TTSFrontEnd, SpeechTokenizer, TextFrontEnd
+from utils import yaml_util, tts_model_util
+from utils.audio import mel_spectrogram
+from transformers import AutoTokenizer, LlamaForCausalLM
+from llm.glmtts import GLMTTS
+from functools import partial
+
+MAX_LLM_SEQ_INP_LEN = 750
 
 class TTSEngine:
     def __init__(self, ckpt_dir="./ckpt", enable_memory_cache=True):
         self.ckpt_dir = ckpt_dir
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.whisper_model = None
         self.voice_cache = VoiceCacheManager(enable_memory_cache=enable_memory_cache)
+        
+        # GLM-TTS models
+        self.frontend = None
+        self.text_frontend = None
+        self.speech_tokenizer = None
+        self.llm = None
+        self.token2wav = None
+        self.special_token_ids = None
+        self.models_loaded = False
+        
         print(f"[TTS] Voice cache initialized: {self.voice_cache.get_cache_stats()}")
         
+    def load_glm_models(self, sample_rate=24000, use_phoneme=False):
+        """Load all GLM-TTS models to GPU"""
+        if self.models_loaded:
+            return
+            
+        print("[TTS] Loading GLM-TTS models...")
+        
+        # Load Speech Tokenizer
+        _model, _feature_extractor = yaml_util.load_speech_tokenizer("ckpt/speech_tokenizer")
+        self.speech_tokenizer = SpeechTokenizer(_model, _feature_extractor)
+        
+        # Load Frontends
+        if sample_rate == 24000:
+            feat_extractor = partial(mel_spectrogram, sampling_rate=sample_rate, hop_size=480, 
+                                    n_fft=1920, num_mels=80, win_size=1920, fmin=0, fmax=8000, center=False)
+        else:
+            raise ValueError(f"Unsupported sample_rate: {sample_rate}")
+            
+        glm_tokenizer = AutoTokenizer.from_pretrained("ckpt/vq32k-phoneme-tokenizer", trust_remote_code=True)
+        tokenize_fn = lambda text: glm_tokenizer.encode(text)
+        
+        self.frontend = TTSFrontEnd(
+            tokenize_fn,
+            self.speech_tokenizer,
+            feat_extractor,
+            os.path.join("./frontend", "campplus.onnx"),
+            os.path.join("./frontend", "spk2info.pt"),
+            self.device,
+        )
+        self.text_frontend = TextFrontEnd(use_phoneme)
+        
+        # Load LLM
+        llama_path = "ckpt/llm"
+        self.llm = GLMTTS(llama_cfg_path=os.path.join(llama_path, "config.json"), mode="PRETRAIN")
+        self.llm.llama = LlamaForCausalLM.from_pretrained(llama_path, dtype=torch.float32).to(self.device)
+        self.llm.llama_embedding = self.llm.llama.model.embed_tokens
+        
+        self.special_token_ids = self._get_special_token_ids(tokenize_fn)
+        self.llm.set_runtime_vars(special_token_ids=self.special_token_ids)
+        
+        # Load Flow and wrap with Token2Wav
+        flow = yaml_util.load_flow_model("ckpt/flow/flow.pt", "ckpt/flow/config.yaml", self.device)
+        self.token2wav = tts_model_util.Token2Wav(flow, sample_rate=sample_rate, device=self.device)
+        
+        self.models_loaded = True
+        print("[TTS] ✓ GLM-TTS models loaded to GPU")
+        
+    def _get_special_token_ids(self, tokenize_fn):
+        """Get special token IDs"""
+        _special_token_ids = {
+            "ats": "<|audio_0|>",
+            "ate": "<|audio_32767|>",
+            "boa": "<|begin_of_audio|>",
+            "eoa": "<|user|>",
+            "pad": "<|endoftext|>",
+        }
+        special_token_ids = {}
+        endoftext_id = tokenize_fn("<|endoftext|>")[0]
+        for k, v in _special_token_ids.items():
+            __ids = tokenize_fn(v)
+            if len(__ids) != 1 or __ids[0] < endoftext_id:
+                raise AssertionError(f"Invalid special token: {k}")
+            special_token_ids[k] = __ids[0]
+        return special_token_ids
+    
     def load_whisper(self):
-        """延迟加载Whisper模型"""
+        """Lazy load Whisper model"""
         if self.whisper_model is None:
             print("[Whisper] Loading model...")
             self.whisper_model = whisper.load_model("base", device="cuda")
@@ -23,7 +104,7 @@ class TTSEngine:
         return self.whisper_model
         
     def transcribe_audio(self, audio_path):
-        """使用Whisper转录音频"""
+        """Transcribe audio using Whisper"""
         try:
             model = self.load_whisper()
             print(f"[Whisper] Transcribing {audio_path}...")
@@ -35,323 +116,143 @@ class TTSEngine:
             print(f"[Whisper] Error: {e}")
             return ""
     
-    def generate_with_voice_id(self, text, voice_id, output_path="output.wav",
-                               progress_callback=None, temperature=0.8, top_p=0.9, 
-                               sampling_strategy='balanced', emotion_type='neutral',
-                               emotion_intensity=0.0, exaggeration=0.0):
-        """
-        使用缓存的语音ID生成语音（快速模式）
+    def _llm_forward(self, prompt_text_token, tts_text_token, prompt_speech_token):
+        """Single LLM forward pass"""
+        def _assert_shape_and_get_len(token):
+            assert token.ndim == 2 and token.shape[0] == 1
+            return torch.tensor([token.shape[1]], dtype=torch.int32).to(token.device)
         
-        Args:
-            text: 要合成的文本
-            voice_id: 语音ID
-            output_path: 输出路径
-            progress_callback: 进度回调
-            temperature: 温度参数
-            top_p: Top-p参数
-            emotion_type: 情感类型
-            emotion_intensity: 情感强度(0.0-1.0)
-            exaggeration: GRPO情感夸张参数(0.0-1.0)
-            sampling_strategy: 采样策略
+        prompt_text_token_len = _assert_shape_and_get_len(prompt_text_token)
+        tts_text_token_len = _assert_shape_and_get_len(tts_text_token)
+        prompt_speech_token_len = _assert_shape_and_get_len(prompt_speech_token)
+        
+        tts_speech_token = self.llm.inference(
+            text=tts_text_token,
+            text_len=tts_text_token_len,
+            prompt_text=prompt_text_token,
+            prompt_text_len=prompt_text_token_len,
+            prompt_speech_token=prompt_speech_token,
+            prompt_speech_token_len=prompt_speech_token_len,
+            beam_size=1,
+            sampling=25,
+            sample_method="ras",
+            spk=None,
+        )
+        return tts_speech_token[0].tolist()
+    
+    def _flow_forward(self, token_list, prompt_speech_tokens, speech_feat, embedding):
+        """Single Flow forward pass"""
+        wav, full_mel = self.token2wav.token2wav_with_cache(
+            token_list,
+            prompt_token=prompt_speech_tokens,
+            prompt_feat=speech_feat,
+            embedding=embedding,
+        )
+        return wav.detach().cpu(), full_mel
+    
+    def generate(self, text, prompt_audio, prompt_text, output_path="output.wav", sample_rate=24000):
+        """Generate speech using loaded models"""
+        if not self.models_loaded:
+            self.load_glm_models(sample_rate=sample_rate)
+        
+        # Text normalization
+        prompt_text_norm = self.text_frontend.text_normalize(prompt_text + " ")
+        synth_text_norm = self.text_frontend.text_normalize(text)
+        
+        # Extract features
+        prompt_text_token = self.frontend._extract_text_token(prompt_text_norm)
+        prompt_speech_token = self.frontend._extract_speech_token([prompt_audio])
+        speech_feat = self.frontend._extract_speech_feat(prompt_audio, sample_rate=sample_rate)
+        embedding = self.frontend._extract_spk_embedding(prompt_audio)
+        
+        # Prepare tokens
+        cache_speech_token = [prompt_speech_token.squeeze().tolist()]
+        flow_prompt_token = torch.tensor(cache_speech_token, dtype=torch.int32).to(self.device)
+        
+        # Normalize and process text
+        tts_text_tn = self.text_frontend.text_normalize(text)
+        
+        outputs = []
+        for tts_text_tn in [tts_text_tn]:
+            tts_text_token = self.frontend._extract_text_token(tts_text_tn + " ")
             
-        Returns:
-            output_path: 生成的音频路径
-            voice_id: 使用的语音ID
-        """
-        start_time = time.time()
+            # LLM inference
+            token_list_res = self._llm_forward(
+                prompt_text_token=prompt_text_token,
+                tts_text_token=tts_text_token,
+                prompt_speech_token=prompt_speech_token
+            )
+            
+            # Flow inference
+            output, _ = self._flow_forward(
+                token_list=token_list_res,
+                prompt_speech_tokens=flow_prompt_token,
+                speech_feat=speech_feat,
+                embedding=embedding
+            )
+            outputs.append(output)
         
-        # 从缓存加载语音特征
-        if progress_callback:
-            progress_callback(f"加载语音缓存 (ID: {voice_id})", time.time() - start_time)
+        # Concatenate outputs
+        tts_speech = torch.concat(outputs, dim=1)
         
+        # Save audio
+        os.makedirs(os.path.dirname(output_path) if os.path.dirname(output_path) else ".", exist_ok=True)
+        torchaudio.save(output_path, tts_speech, sample_rate)
+        
+        return output_path
+    
+    def generate_with_voice_id(self, text, voice_id, output_path="output.wav"):
+        """Generate speech using cached voice ID"""
         cached_voice = self.voice_cache.load_voice(voice_id)
         if not cached_voice:
             raise ValueError(f"Voice ID not found: {voice_id}")
         
-        # 获取缓存的音频路径
         cached_audio_path = self.voice_cache.get_audio_path(voice_id)
         if not cached_audio_path:
-            raise ValueError(f"Cached audio not found for voice ID: {voice_id}")
+            raise ValueError(f"Audio file not found for voice ID: {voice_id}")
         
-        # 获取缓存的参考文本
-        prompt_text = cached_voice['metadata']['prompt_text']
-        
-        print(f"[TTS] Using cached voice: {voice_id} - {prompt_text[:30]}...")
-        
-        # 使用缓存的音频路径生成
         return self.generate(
             text=text,
-            prompt_audio_path=cached_audio_path,
-            prompt_text=prompt_text,
-            output_path=output_path,
-            progress_callback=progress_callback,
-            skip_whisper=True,  # 已有缓存，跳过Whisper
-            temperature=temperature,
-            top_p=top_p,
-            sampling_strategy=sampling_strategy,
-            voice_id=voice_id  # 传递voice_id，避免重复缓存
+            prompt_audio=cached_audio_path,
+            prompt_text=cached_voice["prompt_text"],
+            output_path=output_path
         )
-        
-    def generate(self, text, prompt_audio_path, prompt_text="", output_path="output.wav", 
-                 progress_callback=None, skip_whisper=False, temperature=0.8, top_p=0.9, 
-                 sampling_strategy='balanced', voice_id=None):
-        """
-        使用官方推理脚本生成语音
-        
-        Args:
-            text: 要合成的文本
-            prompt_audio_path: 参考音频路径
-            prompt_text: 参考文本（可选）
-            output_path: 输出路径
-            progress_callback: 进度回调
-            skip_whisper: 是否跳过Whisper
-            temperature: 温度参数
-            top_p: Top-p参数
-            sampling_strategy: 采样策略
-            voice_id: 语音ID（如果已知，避免重复缓存）
-            
-        Returns:
-            output_path: 生成的音频路径
-            voice_id: 语音ID（新生成或已存在）
-        """
-        start_time = time.time()
-        exp_name = f"api_{int(time.time())}"
-        
-        # 生成或获取voice_id
-        if not voice_id:
-            voice_id = self.voice_cache.generate_voice_id(prompt_audio_path)
-        
-        # 检查是否已缓存
-        is_cached = self.voice_cache.exists(voice_id)
-        
-        # 如果没有提供参考文本且未跳过Whisper，使用Whisper自动转录
-        if not prompt_text or prompt_text.strip() == "":
-            if not skip_whisper:
-                if progress_callback:
-                    progress_callback("正在识别参考音频内容 (Whisper)", time.time() - start_time)
-                print("[TTS] Using Whisper to transcribe...")
-                prompt_text = self.transcribe_audio(prompt_audio_path)
-                if not prompt_text:
-                    print("[TTS] Warning: Whisper transcription failed")
-                    prompt_text = "参考音频"  # 默认文本
-            else:
-                print("[TTS] Skipped Whisper as requested")
-                prompt_text = "参考音频"
-        
-        if progress_callback:
-            progress_callback("准备推理数据", time.time() - start_time)
-        
-        # 根据采样策略调整参数
-        if sampling_strategy == 'fast':
-            max_tokens = 1500
-            do_sample = True
-        elif sampling_strategy == 'quality':
-            max_tokens = 2500
-            do_sample = True
-        else:  # balanced
-            max_tokens = 2000
-            do_sample = True
-        
-        # 在examples目录创建临时jsonl
-        jsonl_name = f"{exp_name}.jsonl"
-        jsonl_path = os.path.join("/app/examples", jsonl_name)
-        
-        with open(jsonl_path, 'w') as f:
-            data = {
-                "uttid": "0",
-                "syn_text": text,
-                "prompt_text": prompt_text,
-                "prompt_speech": prompt_audio_path
-            }
-            f.write(json.dumps(data, ensure_ascii=False) + '\n')
-        
-        try:
-            if progress_callback:
-                status_msg = f"生成语音 ({sampling_strategy}模式)"
-                if is_cached:
-                    status_msg += " [使用缓存特征]"
-                progress_callback(status_msg, time.time() - start_time)
-            
-            # 调用官方推理脚本
-            cmd = [
-                'python3', 'glmtts_inference.py',
-                f'--data={exp_name}',
-                f'--exp_name={exp_name}',
-                '--use_cache'
-            ]
-            
-            result = subprocess.run(
-                cmd,
-                cwd='/app',
-                capture_output=True,
-                text=True,
-                timeout=300
-            )
-            
-            if result.returncode != 0:
-                raise Exception(f"Inference failed: {result.stderr}")
-            
-            if progress_callback:
-                progress_callback("处理输出文件", time.time() - start_time)
-            
-            # 查找生成的音频文件
-            output_dir = f'/app/outputs/pretrain{exp_name}/{exp_name}'
-            if os.path.exists(output_dir):
-                files = [f for f in os.listdir(output_dir) if f.endswith('.wav')]
-                if files:
-                    source_file = os.path.join(output_dir, files[0])
-                    shutil.copy(source_file, output_path)
-                    # 清理临时文件
-                    shutil.rmtree(f'/app/outputs/pretrain{exp_name}', ignore_errors=True)
-                    os.remove(jsonl_path)
-                    
-                    elapsed = time.time() - start_time
-                    if progress_callback:
-                        progress_callback(f"完成！耗时 {elapsed:.1f}秒", elapsed)
-                    
-                    print(f"[TTS] Generated: {output_path} (voice_id: {voice_id}, cached: {is_cached})")
-                    return output_path, voice_id
-            
-            raise Exception("Output file not found")
-            
-        except Exception as e:
-            # 清理
-            if os.path.exists(jsonl_path):
-                os.remove(jsonl_path)
-            shutil.rmtree(f'/app/outputs/pretrain{exp_name}', ignore_errors=True)
-            raise e
-    
-    def cache_voice_from_audio(self, audio_path, prompt_text="", skip_whisper=False):
-        """
-        从音频文件创建语音缓存
-        
-        Args:
-            audio_path: 音频文件路径
-            prompt_text: 参考文本（可选）
-            skip_whisper: 是否跳过Whisper
-            
-        Returns:
-            voice_id: 生成的语音ID
-            metadata: 元数据
-        """
-        # 生成voice_id
-        voice_id = self.voice_cache.generate_voice_id(audio_path)
-        
-        # 检查是否已存在
-        if self.voice_cache.exists(voice_id):
-            print(f"[TTS] Voice already cached: {voice_id}")
-            cached_voice = self.voice_cache.load_voice(voice_id)
-            return voice_id, cached_voice['metadata']
-        
-        # 获取参考文本
-        if not prompt_text or prompt_text.strip() == "":
-            if not skip_whisper:
-                print("[TTS] Transcribing audio for cache...")
-                prompt_text = self.transcribe_audio(audio_path)
-                if not prompt_text:
-                    prompt_text = "参考音频"
-            else:
-                prompt_text = "参考音频"
-        
-        print(f"[TTS] Caching voice: {voice_id} - {prompt_text[:30]}...")
-        
-        # TODO: 这里需要实际提取特征并保存
-        # 当前简化实现：只保存音频和元数据
-        # 实际应该调用frontend提取text_token, speech_token, speech_feat, embedding
-        
-        # 临时实现：创建占位符
-        import torch
-        text_token = torch.zeros(1, 10)
-        speech_token = torch.zeros(1, 100)
-        speech_feat = torch.zeros(1, 80, 100)
-        embedding = torch.zeros(1, 192)
-        
-        metadata = self.voice_cache.save_voice(
-            voice_id=voice_id,
-            audio_path=audio_path,
-            prompt_text=prompt_text,
-            text_token=text_token,
-            speech_token=speech_token,
-            speech_feat=speech_feat,
-            embedding=embedding
-        )
-        
-        return voice_id, metadata
-    
-    def list_cached_voices(self):
-        """列出所有缓存的语音"""
-        return self.voice_cache.list_voices()
-    
-    def delete_cached_voice(self, voice_id):
-        """删除缓存的语音"""
-        return self.voice_cache.delete_voice(voice_id)
-    
-    def get_cache_stats(self):
-        """获取缓存统计信息"""
-        return self.voice_cache.get_cache_stats()
     
     def preload_models(self):
-        """预加载所有模型到GPU显存"""
+        """Preload all models to GPU"""
         print("[TTS] Preloading models to GPU...")
-        
-        # 1. 加载Whisper模型
         self.load_whisper()
         print("[TTS] ✓ Whisper model loaded")
-        
-        # 2. 通过运行一次推理来加载GLM-TTS模型
-        try:
-            import tempfile
-            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp:
-                tmp_path = tmp.name
-            
-            # 创建一个简单的测试音频
-            import numpy as np
-            import scipy.io.wavfile as wavfile
-            sample_rate = 24000
-            duration = 1  # 1秒
-            t = np.linspace(0, duration, int(sample_rate * duration))
-            audio = (np.sin(2 * np.pi * 440 * t) * 32767).astype(np.int16)
-            wavfile.write(tmp_path, sample_rate, audio)
-            
-            # 运行一次推理来加载模型
-            print("[TTS] Loading GLM-TTS models...")
-            self.generate(
-                text="测试",
-                prompt_audio_path=tmp_path,
-                prompt_text="测试",
-                output_path="/tmp/warmup.wav",
-                skip_whisper=True
-            )
-            print("[TTS] ✓ GLM-TTS models loaded")
-            
-            # 清理临时文件
-            if os.path.exists(tmp_path):
-                os.remove(tmp_path)
-            if os.path.exists("/tmp/warmup.wav"):
-                os.remove("/tmp/warmup.wav")
-                
-        except Exception as e:
-            print(f"[TTS] Warning: Model preload failed: {e}")
-        
+        self.load_glm_models()
         print("[TTS] ✓ All models preloaded to GPU")
     
     def offload_models(self):
-        """从GPU卸载模型释放显存"""
+        """Offload models from GPU"""
         print("[TTS] Offloading models from GPU...")
-        
-        # 卸载Whisper
-        if self.whisper_model is not None:
+        if self.whisper_model:
             del self.whisper_model
             self.whisper_model = None
-            print("[TTS] ✓ Whisper model offloaded")
-        
-        # 清理GPU缓存
-        try:
-            import torch
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-                print("[TTS] ✓ GPU cache cleared")
-        except:
-            pass
-        
-        print("[TTS] ✓ Models offloaded from GPU")
+        if self.llm:
+            del self.llm
+            self.llm = None
+        if self.token2wav:
+            del self.token2wav
+            self.token2wav = None
+        if self.frontend:
+            del self.frontend
+            self.frontend = None
+        self.models_loaded = False
+        torch.cuda.empty_cache()
+        print("[TTS] ✓ Models offloaded")
+    
+    def get_gpu_memory_usage(self):
+        """Get current GPU memory usage"""
+        if torch.cuda.is_available():
+            allocated = torch.cuda.memory_allocated() / 1024**3
+            reserved = torch.cuda.memory_reserved() / 1024**3
+            return {
+                "allocated_gb": round(allocated, 2),
+                "reserved_gb": round(reserved, 2),
+                "models_loaded": self.models_loaded
+            }
+        return {"error": "CUDA not available"}
