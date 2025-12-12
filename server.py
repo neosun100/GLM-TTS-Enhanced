@@ -19,11 +19,16 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # TTS Engine
 from tts_engine import TTSEngine
-tts_engine = TTSEngine(ckpt_dir='./ckpt')
+from voice_api import register_voice_api
+
+tts_engine = TTSEngine(ckpt_dir='./ckpt', enable_memory_cache=True)
 model_loaded = True
 
 # 进度存储
 progress_store = {}
+
+# 注册语音缓存API
+register_voice_api(app, tts_engine, progress_store, OUTPUT_DIR)
 
 @app.route('/')
 def index():
@@ -50,7 +55,7 @@ def tts_progress(task_id):
 @app.route('/api/tts', methods=['POST'])
 def tts():
     """
-    文本转语音
+    文本转语音（支持voice_id或上传音频）
     ---
     tags:
       - TTS
@@ -61,14 +66,42 @@ def tts():
         in: formData
         type: string
         required: true
+        description: 要合成的文本
+      - name: voice_id
+        in: formData
+        type: string
+        required: false
+        description: 语音ID（如果提供，则不需要上传音频）
       - name: prompt_audio
         in: formData
         type: file
-        required: true
+        required: false
+        description: 参考音频（如果不提供voice_id则必需）
       - name: prompt_text
         in: formData
         type: string
         required: false
+        description: 参考文本（可选）
+      - name: temperature
+        in: formData
+        type: number
+        required: false
+        description: Temperature参数 (0.1-1.5)
+      - name: top_p
+        in: formData
+        type: number
+        required: false
+        description: Top-p参数 (0.5-1.0)
+      - name: sampling_strategy
+        in: formData
+        type: string
+        required: false
+        description: 采样策略 (fast/balanced/quality)
+      - name: skip_whisper
+        in: formData
+        type: string
+        required: false
+        description: 是否跳过Whisper (0/1)
     responses:
       200:
         description: 音频文件
@@ -81,6 +114,7 @@ def tts():
         start_time = time.time()
         
         text = request.form.get('text')
+        voice_id = request.form.get('voice_id')
         prompt_file = request.files.get('prompt_audio')
         prompt_text = request.form.get('prompt_text', '')
         
@@ -90,39 +124,66 @@ def tts():
         top_p = float(request.form.get('top_p', 0.9))
         skip_whisper = request.form.get('skip_whisper', '0') == '1'
         
-        print(f"[TTS] text={text}, prompt_text={prompt_text}, has_file={prompt_file is not None}")
+        print(f"[TTS] text={text}, voice_id={voice_id}, prompt_text={prompt_text}, has_file={prompt_file is not None}")
         print(f"[TTS] Advanced: strategy={sampling_strategy}, temp={temperature}, top_p={top_p}, skip_whisper={skip_whisper}")
         
-        if not text or not prompt_file:
-            print(f"[TTS] Missing required fields")
-            return jsonify({'error': 'text and prompt_audio required', 'task_id': task_id}), 400
+        if not text:
+            return jsonify({'error': 'text is required', 'task_id': task_id}), 400
         
-        # Save prompt
-        prompt_path = os.path.join(OUTPUT_DIR, f'prompt_{task_id}.wav')
-        prompt_file.save(prompt_path)
-        print(f"[TTS] Saved prompt to {prompt_path}")
-        
-        # Generate audio with progress callback
+        # 生成输出路径
         output_path = os.path.join(OUTPUT_DIR, f'output_{task_id}.wav')
-        print(f"[TTS] Starting generation...")
         
+        # 进度回调
         def progress_callback(step, elapsed):
             progress_store[task_id] = {'status': 'processing', 'step': step, 'elapsed': round(elapsed, 1)}
         
-        tts_engine.generate(
-            text, prompt_path, prompt_text, output_path, 
-            progress_callback=progress_callback,
-            skip_whisper=skip_whisper,
-            temperature=temperature,
-            top_p=top_p,
-            sampling_strategy=sampling_strategy
-        )
+        # 如果提供了voice_id，使用快速模式
+        if voice_id:
+            print(f"[TTS] Using voice_id: {voice_id}")
+            
+            if not tts_engine.voice_cache.exists(voice_id):
+                return jsonify({'error': f'Voice ID not found: {voice_id}', 'task_id': task_id}), 404
+            
+            result_path, used_voice_id = tts_engine.generate_with_voice_id(
+                text=text,
+                voice_id=voice_id,
+                output_path=output_path,
+                progress_callback=progress_callback,
+                temperature=temperature,
+                top_p=top_p,
+                sampling_strategy=sampling_strategy
+            )
+            
+        else:
+            # 传统模式：上传音频
+            if not prompt_file:
+                return jsonify({'error': 'prompt_audio or voice_id is required', 'task_id': task_id}), 400
+            
+            # 保存上传的音频
+            prompt_path = os.path.join(OUTPUT_DIR, f'prompt_{task_id}.wav')
+            prompt_file.save(prompt_path)
+            print(f"[TTS] Saved prompt to {prompt_path}")
+            
+            # 生成音频（会自动缓存）
+            result_path, new_voice_id = tts_engine.generate(
+                text=text,
+                prompt_audio_path=prompt_path,
+                prompt_text=prompt_text,
+                output_path=output_path,
+                progress_callback=progress_callback,
+                skip_whisper=skip_whisper,
+                temperature=temperature,
+                top_p=top_p,
+                sampling_strategy=sampling_strategy
+            )
+            
+            print(f"[TTS] Generated with new voice_id: {new_voice_id}")
         
         elapsed = time.time() - start_time
         progress_store[task_id] = {'status': 'completed', 'step': '完成', 'elapsed': round(elapsed, 1)}
         print(f"[TTS] Generation complete in {elapsed:.1f}s, sending file")
         
-        return send_file(output_path, mimetype='audio/wav', as_attachment=True, download_name='generated.wav')
+        return send_file(result_path, mimetype='audio/wav', as_attachment=True, download_name='generated.wav')
     
     except Exception as e:
         import traceback
