@@ -31,6 +31,7 @@ RUN pip3 install --no-cache-dir -r requirements.txt
 COPY *.py ./
 COPY utils/ ./utils/
 COPY llm/ ./llm/
+COPY flow/ ./flow/
 COPY cosyvoice/ ./cosyvoice/
 COPY ckpt/ ./ckpt/
 COPY frontend/ ./frontend/
