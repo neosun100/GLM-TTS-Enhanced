@@ -198,26 +198,7 @@ def tts():
 
 @app.route('/api/tts/stream', methods=['POST'])
 def tts_stream():
-    """
-    流式TTS生成（使用token2wav_stream）
-    ---
-    tags:
-      - TTS
-    consumes:
-      - multipart/form-data
-    parameters:
-      - name: text
-        in: formData
-        type: string
-        required: true
-      - name: voice_id
-        in: formData
-        type: string
-        required: true
-    responses:
-      200:
-        description: Server-Sent Events stream
-    """
+    """流式TTS生成"""
     text = request.form.get('text')
     voice_id = request.form.get('voice_id')
     
@@ -226,28 +207,59 @@ def tts_stream():
     
     def generate():
         try:
-            # 获取voice信息
-            voices = tts_engine.voice_cache.list_voices()
-            voice_data = next((v for v in voices if v['voice_id'] == voice_id), None)
-            
-            if not voice_data:
-                yield f"data: {json.dumps({'type': 'error', 'message': 'Voice not found'})}\n\n"
-                return
-            
-            # 使用临时目录
+            # 使用tts_engine生成完整音频
             import tempfile
-            with tempfile.TemporaryDirectory() as tmpdir:
-                # 准备输入
-                ref_audio = voice_data['audio_path']
-                output_dir = os.path.join(tmpdir, 'output')
-                os.makedirs(output_dir, exist_ok=True)
+            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp:
+                output_path = tmp.name
+            
+            try:
+                # 生成音频
+                result_path, _ = tts_engine.generate_with_voice_id(
+                    text=text,
+                    voice_id=voice_id,
+                    output_path=output_path
+                )
                 
-                # 调用推理脚本生成完整音频
-                cmd = [
-                    'python', 'glmtts_inference.py',
-                    '--text', text,
-                    '--prompt_audio', ref_audio,
-                    '--output_dir', output_dir
+                # 读取并分块发送
+                import wave
+                with wave.open(result_path, 'rb') as wf:
+                    chunk_size = wf.getframerate() * 1  # 1秒
+                    chunk_index = 0
+                    
+                    while True:
+                        frames = wf.readframes(chunk_size)
+                        if not frames:
+                            break
+                        
+                        audio_b64 = base64.b64encode(frames).decode()
+                        chunk_data = {
+                            'type': 'chunk',
+                            'index': chunk_index,
+                            'audio': audio_b64,
+                            'format': 'raw_pcm',
+                            'sample_rate': wf.getframerate(),
+                            'channels': wf.getnchannels(),
+                            'sample_width': wf.getsampwidth()
+                        }
+                        
+                        yield f"data: {json.dumps(chunk_data)}\n\n"
+                        chunk_index += 1
+                        time.sleep(0.1)
+                
+                yield f"data: {json.dumps({'type': 'done', 'total_chunks': chunk_index})}\n\n"
+                
+            finally:
+                if os.path.exists(output_path):
+                    os.remove(output_path)
+                    
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+    
+    return Response(generate(), mimetype='text/event-stream')
+
+@app.route('/api/gpu/status')
                 ]
                 
                 # 生成音频
