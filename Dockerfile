@@ -34,6 +34,7 @@ COPY llm/ ./llm/
 COPY cosyvoice/ ./cosyvoice/
 COPY ckpt/ ./ckpt/
 COPY frontend/ ./frontend/
+COPY configs/ ./configs/
 COPY static/ ./static/
 COPY templates/ ./templates/
 
