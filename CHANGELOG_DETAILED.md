@@ -4,6 +4,75 @@ This document records all development milestones, feature additions, and technic
 
 ---
 
+## 2025-12-12 - v1.2.0: 情感控制与流式推理 (规划中)
+
+### Summary
+基于智谱AI官方文章，实现GLM-TTS的三大核心增强：情感控制、流式推理和并发优化。与v1.1.0的voice cache系统协同，提供生产级实时语音合成能力。
+
+### Features Planned
+- **情感控制系统** (`emotion_control.py`)
+  - 5种预设情感：neutral, happy, sad, angry, excited
+  - 情感强度调节：0.0-1.0范围
+  - GRPO多奖励优化集成
+  - API端点：`POST /api/voices/{voice_id}/emotion`
+
+- **流式推理引擎** (`streaming_engine.py`)
+  - SSE流式音频输出
+  - 分句处理：自动按标点分割
+  - <200ms首字节延迟
+  - Base64编码安全传输
+  - API端点：`POST /api/tts/stream`
+
+- **并发优化**
+  - 请求队列管理
+  - GPU资源池
+  - 理论支持12路并发
+  - 优先级调度（voice_id缓存优先）
+
+### Technical Details
+- **情感参数**
+  - `emotion_type`: 情感类型
+  - `emotion_intensity`: 情感强度
+  - `exaggeration`: GRPO夸张参数
+  
+- **流式架构**
+  ```
+  文本 → 分句 → 逐句TTS → Base64 → SSE推送
+           ↓
+       情感参数注入
+  ```
+
+- **性能目标**
+  - 首字节延迟：<200ms
+  - 并发能力：12路（双GPU）
+  - 情感切换：实时无延迟
+
+### API Endpoints
+- `GET /api/emotions` - 列出所有情感类型
+- `POST /api/voices/{voice_id}/emotion` - 设置语音情感
+- `POST /api/tts/stream` - 流式TTS生成
+- `GET /api/tts/stream/status` - 查询流式状态
+- `POST /api/tts/stream/stop` - 停止流式生成
+
+### Integration with v1.1.0
+- voice_id缓存自动应用情感配置
+- 流式模式优先使用缓存特征
+- 情感参数保存到voice metadata
+
+### Documentation
+- `EMOTION_STREAMING_GUIDE.md` - 使用指南
+- `test_emotion_streaming.py` - 测试脚本
+
+### Reference
+- 智谱AI官方文章：GLM-TTS效果超index-tts2
+- 论文：GRPO多奖励优化
+- 性能指标：<200ms延迟，12路并发
+
+### Status
+🚧 开发中 - 核心模块已创建，待集成测试
+
+---
+
 ## 2025-12-12 - v1.1.0: Voice Cache System
 
 ### Summary

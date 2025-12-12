@@ -107,3 +107,7 @@ modules/*
 
 # Docker
 .dockerignore
+
+# Public account articles (do not sync to GitHub)
+公众号文章.md
+*公众号*.md

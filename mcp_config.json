@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "glm-tts": {
+      "command": "python3",
+      "args": ["mcp_server.py"],
+      "env": {
+        "GPU_IDLE_TIMEOUT": "600"
+      }
+    }
+  }
+}

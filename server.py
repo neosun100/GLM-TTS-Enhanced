@@ -20,6 +20,7 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 # TTS Engine
 from tts_engine import TTSEngine
 from voice_api import register_voice_api
+from emotion_streaming_api import emotion_streaming_bp
 
 tts_engine = TTSEngine(ckpt_dir='./ckpt', enable_memory_cache=True)
 model_loaded = True
@@ -27,7 +28,8 @@ model_loaded = True
 # 进度存储
 progress_store = {}
 
-# 注册语音缓存API
+# 注册语音缓存API和情感流式API
+app.register_blueprint(emotion_streaming_bp)
 register_voice_api(app, tts_engine, progress_store, OUTPUT_DIR)
 
 @app.route('/')

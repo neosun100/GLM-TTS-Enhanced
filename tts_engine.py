@@ -37,7 +37,8 @@ class TTSEngine:
     
     def generate_with_voice_id(self, text, voice_id, output_path="output.wav",
                                progress_callback=None, temperature=0.8, top_p=0.9, 
-                               sampling_strategy='balanced'):
+                               sampling_strategy='balanced', emotion_type='neutral',
+                               emotion_intensity=0.0, exaggeration=0.0):
         """
         使用缓存的语音ID生成语音（快速模式）
         
@@ -48,6 +49,9 @@ class TTSEngine:
             progress_callback: 进度回调
             temperature: 温度参数
             top_p: Top-p参数
+            emotion_type: 情感类型
+            emotion_intensity: 情感强度(0.0-1.0)
+            exaggeration: GRPO情感夸张参数(0.0-1.0)
             sampling_strategy: 采样策略
             
         Returns:
