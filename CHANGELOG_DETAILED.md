@@ -4,7 +4,102 @@ This document records all development milestones, feature additions, and technic
 
 ---
 
-## 2025-12-12 - v1.2.0: 情感控制系统 (已发布)
+## 2025-12-12 - v1.2.0: 代码清理和功能验证
+
+### Summary
+验证原始GLM-TTS代码功能，移除不支持的情感控制和流式推理功能。v1.2.0现在只包含真正可用的功能。
+
+### 🔍 代码审查结果
+
+#### 检查原始GLM-TTS代码
+- ✅ `glmtts_inference.py` - 推理脚本**不支持**情感参数
+- ✅ `grpo/` - GRPO情感代码仅用于**训练**，不用于推理
+- ✅ `utils/tts_model_util.py` - 有`token2wav_stream`但未集成
+- ❌ 推理脚本参数: 只有data, exp_name, use_cache, use_phoneme, sample_rate
+
+#### 结论
+原始GLM-TTS推理脚本**不支持**情感控制参数，智谱AI文章提到的情感功能可能是：
+1. 训练时使用GRPO优化
+2. 或者是商业版本的功能
+3. 开源版本推理脚本未包含
+
+### ✅ v1.2.0 实际功能
+
+#### 保留的功能（已验证可用）
+1. **Voice Cache System** (v1.1.0)
+   - voice_id机制
+   - 双层缓存（文件+内存）
+   - 自动特征提取
+   - 8个API端点
+
+2. **Whisper Auto-Transcribe**
+   - 参考文本为空时自动识别
+   - 可选跳过（skip_whisper）
+
+3. **Web UI**
+   - 清爽界面
+   - GPU状态监控
+   - 实时进度显示
+   - 高级参数（temperature, top_p, sampling_strategy）
+
+4. **Docker部署**
+   - All-in-one镜像
+   - GPU支持
+   - 持久化存储
+
+### ❌ 移除的功能（不支持）
+
+#### 1. 情感控制
+- 原因: 推理脚本不接受emotion参数
+- 移除文件:
+  - emotion_control.py
+  - emotion_streaming_api.py
+  - test_emotion_*.py
+  - EMOTION_*.md
+
+#### 2. 流式推理
+- 原因: token2wav_stream未集成到推理流程
+- 移除文件:
+  - streaming_engine.py
+  - test_streaming_concurrent.py
+
+### 📦 Docker镜像
+
+**v1.2.0 (最终版)**:
+- **标签**: `neosun/glm-tts:v1.2.0`
+- **Digest**: `sha256:23666dc7ec4fe0e4a5b61406c7f26d597b681ce4b9d43f815b04a11d8a8385dc`
+- **大小**: 20.5GB
+- **功能**: Voice Cache + Whisper + Web UI
+- **状态**: 生产就绪
+
+### 🎯 功能对比
+
+| 功能 | v1.1.0 | v1.2.0 | 说明 |
+|-----|--------|--------|------|
+| Voice Cache | ✅ | ✅ | 保持 |
+| Whisper转录 | ✅ | ✅ | 保持 |
+| Web UI | ✅ | ✅ | 清理 |
+| 情感控制 | ❌ | ❌ | 不支持 |
+| 流式推理 | ❌ | ❌ | 不支持 |
+| Docker镜像 | 20.5GB | 20.5GB | 更新 |
+
+### 📝 经验教训
+
+1. **验证功能**: 添加功能前必须验证原始代码支持
+2. **代码审查**: 检查推理脚本的实际参数
+3. **诚实沟通**: 不支持的功能不应该出现在UI
+4. **文档准确**: 只记录真正可用的功能
+
+### 🔗 相关提交
+
+- `44ef74a` - 移除不支持的情感控制功能
+- `f120fef` - 修复TypeError（移除emotion参数）
+- `6e225cf` - 添加实现状态说明（已删除）
+
+### Git Tags
+- `v1.2.0` - 代码清理版本（仅Voice Cache功能）
+
+---
 
 ### Summary
 基于智谱AI官方文章，实现GLM-TTS的情感控制功能。支持5种预设情感和自定义强度调节，提供生产级实时情感切换能力。
