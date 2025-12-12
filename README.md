@@ -1,248 +1,298 @@
-# GLM-TTS: Controllable & Emotion-Expressive Zero-shot TTS with Multi-Reward Reinforcement Learning
+[English](README.md) | [简体中文](README_CN.md) | [繁體中文](README_TW.md) | [日本語](README_JP.md)
 
-[中文阅读](README_zh.md)
+# GLM-TTS Enhanced: Production-Ready TTS Service
 
-<div align="center">
-<img src=assets/images/logo.svg  width="50%"/>
-</div>
+[![Docker Hub](https://img.shields.io/docker/v/neosun/glm-tts?label=Docker%20Hub)](https://hub.docker.com/r/neosun/glm-tts)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![CUDA](https://img.shields.io/badge/CUDA-12.1-green.svg)](https://developer.nvidia.com/cuda-toolkit)
+[![Python](https://img.shields.io/badge/Python-3.10--3.12-blue.svg)](https://www.python.org/)
 
-<p align="center">
-    <a href="https://huggingface.co/zai-org/GLM-TTS" target="_blank">🤗 HuggingFace</a>
-    &nbsp;&nbsp;|&nbsp;&nbsp;
-    <a href="https://modelscope.cn/models/ZhipuAI/GLM-TTS" target="_blank">🤖 ModelScope</a>
-    &nbsp;&nbsp;|&nbsp;&nbsp;
-    <a href="https://audio.z.ai/" target="_blank"> 🛠️Audio.Z.AI</a>
-</p>
+Enhanced version of GLM-TTS with production-ready features: Web UI, REST API, Whisper auto-transcription, and Docker deployment.
 
-## Model Introduction
-GLM-TTS is a high-quality text-to-speech (TTS) synthesis system based on large language models, supporting zero-shot voice cloning and streaming inference. This system adopts a two-stage architecture: first, it uses LLM to generate speech token sequences, then uses Flow model to convert tokens into high-quality audio waveforms. By introducing a Multi-Reward Reinforcement Learning framework, GLM-TTS can generate more expressive and emotional speech, significantly improving the expressiveness of traditional TTS systems.
+![GLM-TTS Enhanced UI](https://img.aws.xin/uPic/kMHzYn.png)
 
-## News & Updates
+## ✨ Enhanced Features
 
-- **[2025.12.11]** 🎉 The project is officially open-sourced, featuring inference scripts and a series of model weights.
-- **[Coming Soon]** 2D Vocos vocoder update in progress.
-- **[Coming Soon]** Model Weights Optimized via Reinforcement Learning
+### 🎯 Core Enhancements
+- **🌐 Modern Web UI**: Responsive interface with real-time progress tracking
+- **🔌 REST API**: Complete API with Swagger documentation at `/apidocs`
+- **🎤 Whisper Integration**: Automatic audio transcription when reference text is empty
+- **📊 Real-time Progress**: SSE-based streaming with elapsed time display
+- **🐳 All-in-One Docker**: 20.5GB image with all models and dependencies
+- **⚡ GPU Optimized**: cuDNN 9 support for ONNX Runtime GPU acceleration
+- **💾 Persistent Storage**: Host-mounted directory for file management
+- **🔧 Advanced Controls**: Temperature, Top-p, and sampling strategy parameters
+- **🤖 MCP Server**: Model Context Protocol server for AI agent integration
 
-## Features
+### 🆕 What's New
+- Whisper auto-transcription (leave reference text empty)
+- Real-time generation progress with timing
+- Experimental advanced parameters
+- Files stored on host at `/tmp/glm-tts-voices`
+- Full ONNX Runtime GPU acceleration with cuDNN 9
+- MCP server for seamless AI agent integration
 
-- **Zero-shot Voice Cloning**: Clone any speaker's voice with just 3-10 seconds of prompt audio
-- **RL-enhanced Emotion Control**: Achieve more natural emotional expression and prosody control through multi-reward reinforcement learning framework
-- **Streaming Inference**: Support real-time streaming audio generation, suitable for interactive applications
-- **High-quality Synthesis**: Generate natural and expressive speech with quality comparable to commercial systems
-- **Multi-language Support**: Primarily supports Chinese, while also supporting English mixed text
-- **Phoneme-level Modeling**: Support phoneme-level text-to-speech conversion
-- **Flexible Inference Methods**: Support multiple sampling strategies and inference modes
+## 🚀 Quick Start (Recommended)
 
-## Quick Start
-
-### Environment Setup
-
-Ensure you use Python 3.10 - Python 3.12 versions.
+### Using Docker (All-in-One Image)
 
 ```bash
-# Clone repository
-git clone https://github.com/zai-org/GLM-TTS.git
-cd GLM-TTS
+# Pull the all-in-one image
+docker pull neosun/glm-tts:all-in-one
 
-# Install dependencies
-pip install -r requirements.txt
+# Create temporary directory
+mkdir -p /tmp/glm-tts-voices
+chmod 777 /tmp/glm-tts-voices
 
-# Install reinforcement learning related dependencies (optional)
-cd grpo/modules
-git clone https://github.com/s3prl/s3prl
-git clone https://github.com/omine-me/LaughterSegmentation
-# Download wavlm_large_finetune.pth and place it in grpo/ckpt directory
+# Run with GPU 0 (change device ID as needed)
+docker run -d \
+  --name glm-tts \
+  --runtime=nvidia \
+  -e NVIDIA_VISIBLE_DEVICES=0 \
+  -e PORT=8080 \
+  -e TEMP_DIR=/tmp/glm-tts-voices \
+  -p 8080:8080 \
+  -v /tmp/glm-tts-voices:/tmp/glm-tts-voices \
+  --restart unless-stopped \
+  neosun/glm-tts:all-in-one
 ```
 
-### Download Pre-trained Models
+**Access the Web UI**: `http://localhost:8080`
 
-We support downloading the complete model weights (including Tokenizer, LLM, Flow, Vocoder, and Frontend) from HuggingFace or ModelScope.
+### Using Docker Compose
+
+```yaml
+version: '3.8'
+
+services:
+  glm-tts:
+    image: neosun/glm-tts:all-in-one
+    container_name: glm-tts
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=0
+      - PORT=8080
+      - TEMP_DIR=/tmp/glm-tts-voices
+    ports:
+      - "8080:8080"
+    volumes:
+      - /tmp/glm-tts-voices:/tmp/glm-tts-voices
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['0']
+              capabilities: [gpu]
+```
+
+Start the service:
+```bash
+docker-compose up -d
+```
+
+## 📖 Usage
+
+### Web Interface
+
+1. Open `http://localhost:8080` in your browser
+2. Upload a reference audio file (3-10 seconds, WAV format)
+3. Enter text to synthesize
+4. **Optional**: Leave "Reference Text" empty for auto-transcription via Whisper
+5. **Optional**: Expand "Advanced Parameters" for fine-tuning
+6. Click "Generate Speech" and watch real-time progress
+7. Download the generated audio
+
+### REST API
+
+**Generate Speech:**
 
 ```bash
-# Create model directory
-mkdir -p ckpt
-
-# Option 1: Download from HuggingFace
-pip install -U huggingface_hub
-huggingface-cli download zai-org/GLM-TTS --local-dir ckpt
-
-# Option 2: Download from ModelScope
-pip install -U modelscope
-modelscope download --model ZhipuAI/GLM-TTS --local_dir ckpt
+curl -X POST http://localhost:8080/api/tts \
+  -F "text=Hello, this is a test." \
+  -F "prompt_audio=@reference.wav" \
+  -F "prompt_text=Reference audio text" \
+  -F "temperature=0.8" \
+  -F "top_p=0.9" \
+  -F "sampling_strategy=balanced"
 ```
 
-### Running Inference Demo
+**API Documentation**: Visit `http://localhost:8080/apidocs` for interactive Swagger docs.
 
-#### Command Line Inference
+**Health Check:**
+```bash
+curl http://localhost:8080/health
+```
+
+### MCP Server Integration
+
+The project includes an MCP (Model Context Protocol) server for AI agent integration:
 
 ```bash
-python glmtts_inference.py \
-    --data=example_zh \
-    --exp_name=_test \
-    --use_cache \
-    # --phoneme # Add this flag to enable phoneme capabilities.
+# Start MCP server
+python mcp_server.py
+
+# Configure in your AI agent (e.g., Claude Desktop)
+# See MCP_GUIDE.md for detailed setup
 ```
 
-#### Shell Script Inference
+### Advanced Parameters
+
+- **Temperature** (0.1-1.5): Controls randomness (higher = more varied)
+- **Top-p** (0.5-1.0): Nucleus sampling threshold
+- **Sampling Strategy**:
+  - `fast`: Quick generation, lower quality
+  - `balanced`: Default, good quality/speed trade-off
+  - `quality`: Best quality, slower generation
+- **Skip Whisper**: Disable auto-transcription for faster processing
+
+## 🏗️ Architecture
+
+```
+┌─────────────────┐
+│   Web UI        │
+│  (HTML/JS)      │
+└────────┬────────┘
+         │
+┌────────▼────────┐
+│  Flask Server   │
+│  (server.py)    │
+└────────┬────────┘
+         │
+┌────────▼────────┐
+│  TTS Engine     │
+│ (tts_engine.py) │
+└────────┬────────┘
+         │
+    ┌────┴────┐
+    │         │
+┌───▼──┐  ┌──▼────┐
+│Whisper│  │GLM-TTS│
+│ Model │  │ Model │
+└───────┘  └───────┘
+```
+
+### Enhanced Components
+
+| Component | Description |
+|-----------|-------------|
+| `server.py` | Flask REST API with SSE progress streaming |
+| `tts_engine.py` | TTS inference engine with Whisper integration |
+| `mcp_server.py` | MCP server for AI agent integration |
+| `Dockerfile` | Multi-stage build with cuDNN 9 |
+| `docker-compose.yml` | Production deployment configuration |
+
+## 🔧 Configuration
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | 8080 | Server port |
+| `TEMP_DIR` | `/tmp/glm-tts-voices` | Temporary file storage |
+| `GPU_IDLE_TIMEOUT` | 60 | GPU idle timeout (seconds) |
+| `NVIDIA_VISIBLE_DEVICES` | 0 | GPU device ID |
+
+### GPU Selection
+
+To use a specific GPU (e.g., GPU 2):
 
 ```bash
-bash glmtts_inference.sh
+docker run -e NVIDIA_VISIBLE_DEVICES=2 ...
 ```
 
-#### Interactive Web Interface
+Or in `docker-compose.yml`:
+```yaml
+environment:
+  - NVIDIA_VISIBLE_DEVICES=2
+deploy:
+  resources:
+    reservations:
+      devices:
+        - device_ids: ['2']
+```
+
+## 📊 Performance
+
+- **Model Size**: 20.5GB (all-in-one image)
+- **VRAM Usage**: ~12GB during inference
+- **Generation Speed**: 2-5 seconds for 10-second audio
+- **Whisper Overhead**: +2-3 seconds for auto-transcription
+- **Startup Time**: ~30 seconds
+
+## 🛠️ Troubleshooting
+
+### Common Issues
+
+**CUDA Out of Memory**
+- Use a GPU with more VRAM (16GB+ recommended)
+- Close other GPU applications
+
+**cuDNN Version Mismatch**
+- Use the provided Docker image (cuDNN 9 included)
+- Check: `ldconfig -p | grep cudnn`
+
+**Slow Generation**
+- Verify GPU usage: `nvidia-smi`
+- Check NVIDIA_VISIBLE_DEVICES matches your GPU
+
+**Whisper Fails**
+- Ensure audio is clear and in supported format
+- Use `skip_whisper=true` to bypass
+
+## 📦 Building from Source
 
 ```bash
-python tools/gradio_app.py
+# Build Docker image
+docker build -t glm-tts:custom .
+
+# Push to registry
+docker tag glm-tts:custom your-registry/glm-tts:latest
+docker push your-registry/glm-tts:latest
 ```
 
-## System Architecture
+## 🤝 Contributing
 
-### Overview
+Contributions welcome! Please:
 
+1. Fork the repository
+2. Create a feature branch
+3. Commit your changes
+4. Push to the branch
+5. Open a Pull Request
 
-GLM-TTS adopts a two-stage design: in the first stage, a large language model (LLM) based on Llama architecture converts input text into speech token sequences; in the second stage, the Flow Matching model converts these token sequences into high-quality mel-spectrogram, and finally generates audio waveforms through a vocoder. The system supports zero-shot voice cloning by extracting speaker features from prompt audio without fine-tuning for specific speakers.
+## 📝 Changelog
 
-<div align="center">
-  <img src="assets/images/architecture.png" width="50%" alt="GLM-TTS Architecture" title="GLM-TTS Architecture">
-</div>
+### v1.0.0 (2025-12-12)
+- ✨ Initial enhanced release
+- 🌐 Web UI with real-time progress
+- 🔌 REST API with Swagger docs
+- 🎤 Whisper auto-transcription
+- 🐳 All-in-one Docker image (20.5GB)
+- ⚡ cuDNN 9 for ONNX Runtime
+- 💾 Host-mounted storage
+- 🔧 Advanced parameter controls
+- 🤖 MCP server integration
 
-### Fine-grained Pronunciation Control (Phoneme-in)
+## 📄 License
 
-For scenarios demanding high pronunciation accuracy, such as educational assessments and audiobooks, GLM-TTS introduces the **Phoneme-in** mechanism to address automatic pronunciation ambiguity in polyphones (e.g., "行" which can be read as *xíng* or *háng*) and rare characters. This mechanism supports **"Hybrid Phoneme + Text"** input, enabling precise, targeted control over specific vocabulary pronunciation.
+Apache License 2.0 - see [LICENSE](LICENSE)
 
-- **Hybrid Training**
-  During training, random G2P (Grapheme-to-Phoneme) conversion is applied to parts of the text. This strategy compels the model to adapt to hybrid input sequences, preserving its ability to understand pure text while enhancing generalization for phoneme inputs.
+## 🙏 Acknowledgments
 
-- **Targeted Inference**
-  Inference follows a `G2P -> Table Lookup Replacement -> Hybrid Input` workflow:
-  1. **Global Conversion**: Obtain the complete phoneme sequence for the input text.
-  2. **Dynamic Replacement**: Using a "Dynamic Controllable Dictionary," automatically identify polyphones or rare characters and replace them with specified target phonemes.
-  3. **Hybrid Generation**: Feed the combination of replaced phonemes and original text into GLM-TTS as a hybrid input. This ensures precise pronunciation control for specific words while maintaining natural prosody.
+- [GLM-TTS](https://github.com/zai-org/GLM-TTS) - Original TTS model
+- [OpenAI Whisper](https://github.com/openai/whisper) - Speech recognition
+- [CosyVoice](https://github.com/FunAudioLLM/CosyVoice) - Frontend framework
 
+## ⭐ Star History
 
-### RL Alignment
+[![Star History Chart](https://api.star-history.com/svg?repos=neosun100/GLM-TTS-Enhanced&type=Date)](https://star-history.com/#neosun100/GLM-TTS-Enhanced)
 
-<div align="center">
-  <img src="assets/images/rl.png" width="70%" alt="GLM-TTS RL" title="GLM-TTS RL">
-</div>
+## 📱 Follow Us
 
-To address the issue of flat emotional expression in traditional TTS, we introduce a multi-reward reinforcement learning framework. This framework comprehensively evaluates generated speech through multiple reward functions (including similarity reward, CER reward, emotion reward, laughter reward, etc.) and uses the GRPO (Group Relative Policy Optimization) algorithm to optimize the LLM's generation strategy. Specifically:
+![公众号](https://img.aws.xin/uPic/扫码_搜索联合传播样式-标准色版.png)
 
-1. **Multi-reward Design**: The system designs various reward functions to evaluate the quality of generated speech from different dimensions, including sound quality, similarity, emotional expression, etc.
-2. **Reward Server**: Computes multiple reward functions through a distributed reward server, supporting parallel processing
-3. **Policy Optimization**: Uses GRPO algorithm to optimize the LLM's generation strategy based on reward signals, enhancing the emotional expressiveness of speech
-4. **Token-level Rewards**: Supports fine-grained token-level reward allocation, providing more precise optimization signals
+---
 
-Through RL optimization, GLM-TTS_RL reduces the CER metric from 1.03 to 0.89 compared to the base model, while maintaining high similarity, achieving better sound quality and expressiveness.
-
-## Core Components & Implementation
-
-### LLM Backend
-- **File Location**: [`llm/glmtts.py`](llm/glmtts.py)
-- **Function**: Text-to-speech model based on Llama architecture, responsible for converting input text into speech token sequences
-- **Supported Modes**: Pretrained (PRETRAIN), Fine-tuning (SFT), and LoRA modes
-
-### Flow Matching
-- **File Location**: [`flow/`](flow/) directory
-- **Core Files**: 
-  - [`dit.py`](flow/dit.py): Diffusion Transformer implementation, supporting conditional generation
-  - [`flow.py`](flow/flow.py): Streaming inference support, implementing real-time audio generation
-- **Function**: Converts token sequences generated by LLM into high-quality mel-spectrogram
-
-### Frontend
-- **File Location**: [`cosyvoice/cli/frontend.py`](cosyvoice/cli/frontend.py)
-- **Function**: Preprocessing of text and speech, including text normalization, phoneme conversion, speech token extraction, and speaker embedding extraction
-- **Features**: Supports Chinese and English mixed text processing
-
-### Reinforcement Learning Module
-- **File Location**: [`grpo/`](grpo/) directory
-- **Core Files**:
-  - [`grpo_utils.py`](grpo/grpo_utils.py): GRPO algorithm implementation and batch inference
-  - [`reward_func.py`](grpo/reward_func.py): Multi-reward function implementation
-  - [`reward_server.py`](grpo/reward_server.py): Distributed reward server
-- **Function**: Optimizes the emotional expressiveness of the TTS system through multi-reward reinforcement learning
-
-## Evaluation Results
-
-Evaluated on `seed-tts-eval zh testset`. To maintain consistency with the original evaluation, inference was performed without the `--phoneme` flag.
-
-**CER**: Character Error Rate (lower is better $\downarrow$) | **SIM**: Similarity (higher is better $\uparrow$)
-
-| Model | CER $\downarrow$ | SIM $\uparrow$ | Open-source |
-| :--- | :---: | :---: | :---: |
-| MegaTTS3 | 1.52 | 79.0 | 🔒 No |
-| DiTAR | 1.02 | 75.3 | 🔒 No |
-| CosyVoice3 | 1.12 | 78.1 | 🔒 No |
-| Seed-TTS | 1.12 | **79.6** | 🔒 No |
-| MiniMax | **0.83** | 78.3 | 🔒 No |
-| CosyVoice2 | 1.38 | 75.7 | 👐 Yes |
-| F5-TTS | 1.53 | 76.0 | 👐 Yes |
-| FireRedTTS-2 | 1.14 | 73.6 | 👐 Yes |
-| IndexTTS2 | 1.03 | 76.5 | 👐 Yes |
-| VibeVoice | 1.16 | 74.4 | 👐 Yes |
-| HiggsAudio-v2 | 1.50 | 74.0 | 👐 Yes |
-| VoxCPM | 0.93 | 77.2 | 👐 Yes |
-| **GLM-TTS (Ours)** | 1.03 | 76.1 | 👐 Yes |
-| **GLM-TTS_RL (Ours)** | **0.89** | 76.4 | 👐 Yes |
-
-## Project Structure
-
-```
-GLM-TTS/
-├── glmtts_inference.py              # Main inference script, containing complete inference process
-├── glmtts_inference.sh              # Pre-trained model inference script
-├── configs/                         # Configuration files directory
-│   ├── spk_prompt_dict.yaml         # Speaker prompt dictionary
-│   ├── lora_adapter_configV3.1.json # LoRA adapter configuration
-│   ├── G2P_able_1word.json          # Single character phoneme conversion configuration
-│   ├── G2P_all_phonemes.json        # Full phoneme list
-│   ├── G2P_replace_dict.jsonl       # Phoneme replacement dictionary
-│   └── custom_replace.jsonl         # Custom replacement rules
-├── cosyvoice/                       # Cosyvoice module
-│   ├── cli/
-│   │   └── frontend.py              # Text and speech frontend processing
-│   └── utils/                       # Utility functions
-├── examples/                        # Example data
-│   ├── *.jsonl                      # Example jsonl files
-│   └── prompt/                      # Prompt audio directory
-│       ├── *.wav                    # Prompt audio (for research use only)
-│       └── LICENSE                  # Audio file license
-├── flow/                            # Flow model related
-│   ├── dit.py                       # Diffusion Transformer implementation
-│   ├── flow.py                      # Streaming Flow model
-│   └── modules.py                   # Flow model basic modules
-├── grpo/                            # Reinforcement learning module
-│   ├── grpo_utils.py                # GRPO algorithm implementation
-│   ├── reward_func.py               # Multi-reward functions
-│   ├── reward_server.py             # Distributed reward server
-│   ├── train_ds_grpo.py             # GRPO training script
-│   └── data/                        # Training data and configuration
-├── llm/                             # Large language model related
-│   └── glmtts.py                    # GLM-TTS LLM implementation
-├── frontend/                        # Frontend model files
-│   ├── campplus.onnx                # Speaker embedding model
-│   └── cosyvoice_frontend.yaml      # Frontend configuration
-├── tools/                           # Tool scripts
-│   ├── gradio_app.py                # Gradio interactive interface
-│   ├── ffmpeg_speech_control.py     # Audio processing tool
-│   └── flow_reconstruct.py          # Audio reconstruction
-└── utils/                           # Common utilities
-    ├── tts_model_util.py            # TTS model utilities
-    ├── yaml_util.py                 # YAML configuration loading utility
-    ├── audio.py                     # Audio processing utility
-    ├── seed_util.py                 # Random seed utility
-    ├── block_mask_util.py           # Block mask utility
-    ├── vocos_util.py                # Vocos vocoder utility
-    ├── hift_util.py                 # Hift vocoder utility
-    ├── whisper_models/              # Whisper model components
-    └── glm_g2p.py                   # Text to phoneme conversion
-```
-
-## Acknowledgments
-
-We thank the following open-source projects for their support:
-
-- [CosyVoice](https://github.com/FunAudioLLM/CosyVoice) - Providing frontend processing framework and high-quality vocoder
-- [Llama](https://github.com/meta-llama/llama) - Providing basic language model architecture
-- [Vocos](https://github.com/charactr-platform/vocos) - Providing high-quality vocoder
-- [GRPO-Zero](https://github.com/policy-gradient/GRPO-Zero) - Reinforcement learning algorithm implementation inspiration
+**Made with ❤️ by the GLM-TTS Enhanced Team**
