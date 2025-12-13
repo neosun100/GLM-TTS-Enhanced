@@ -215,12 +215,30 @@ deploy:
 
 ## 📊 Performance
 
+### Quick Stats
+
 - **Model Size**: 23.6GB (all-in-one image with v2.3.1)
 - **VRAM Usage**: ~12GB during inference
 - **Generation Speed**: 2-3 seconds for 10-second audio (20-30x faster than v2.0.0)
 - **Whisper Overhead**: +2-3 seconds for auto-transcription
 - **Startup Time**: ~90 seconds (one-time model loading)
 - **Models Cached**: All models resident in GPU memory for instant inference
+
+### Benchmark Results
+
+Comprehensive performance testing across different text lengths:
+
+| Text Length | Generation Time | File Size | Real-time Rate |
+|-------------|----------------|-----------|----------------|
+| 8 chars | 3.39s | 226KB | 2.4x |
+| 30 chars | 8.97s | 670KB | 3.3x |
+| 60 chars | 10.57s | 808KB | 5.7x |
+| 100 chars | 12.51s | 966KB | 8.0x |
+| 150 chars | 20.66s | 1.6MB | 7.3x |
+
+**Average Real-time Rate**: 5.3x (audio duration / generation time)
+
+📄 **Full Performance Report**: See [PERFORMANCE_REPORT.md](PERFORMANCE_REPORT.md) for detailed analysis, optimization tips, and benchmarks.
 
 ## 🛠️ Troubleshooting
 
