@@ -144,7 +144,7 @@ class TextFrontEnd:
                 remove_erhua=False,
                 full_to_half=True,
                 remove_interjections=False,
-                overwrite_cache=True
+                overwrite_cache=False
             )
             self.en_tn_model = EnNormalizer()
 
